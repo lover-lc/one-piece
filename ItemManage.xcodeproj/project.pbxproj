@@ -27,6 +27,8 @@
 		A1B2C3D4E5F6789012345A12 /* ItemDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6789012345B14 /* ItemDetailView.swift */; };
 		A1B2C3D4E5F6789012345A13 /* ItemRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6789012345B15 /* ItemRowView.swift */; };
 		A1B2C3D4E5F6789012345A14 /* DeleteAreaSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6789012345B16 /* DeleteAreaSheet.swift */; };
+		A1B2C3D4E5F6789012345A15 /* OnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6789012345B17 /* OnboardingView.swift */; };
+		A1B2C3D4E5F6789012345A16 /* SearchViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F6789012345B18 /* SearchViewModel.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -62,6 +64,8 @@
 		A1B2C3D4E5F6789012345B14 /* ItemDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemDetailView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6789012345B15 /* ItemRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemRowView.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F6789012345B16 /* DeleteAreaSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeleteAreaSheet.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6789012345B17 /* OnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OnboardingView.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F6789012345B18 /* SearchViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchViewModel.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -152,6 +156,7 @@
 				A1B2C3D4E5F6789012345B14 /* ItemDetailView.swift */,
 				A1B2C3D4E5F6789012345B15 /* ItemRowView.swift */,
 				A1B2C3D4E5F6789012345B16 /* DeleteAreaSheet.swift */,
+				A1B2C3D4E5F6789012345B17 /* OnboardingView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -159,6 +164,7 @@
 		A1B2C3D4E5F6789012345F08 /* ViewModels */ = {
 			isa = PBXGroup;
 			children = (
+				A1B2C3D4E5F6789012345B18 /* SearchViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -281,6 +287,8 @@
 				A1B2C3D4E5F6789012345A12 /* ItemDetailView.swift in Sources */,
 				A1B2C3D4E5F6789012345A13 /* ItemRowView.swift in Sources */,
 				A1B2C3D4E5F6789012345A14 /* DeleteAreaSheet.swift in Sources */,
+				A1B2C3D4E5F6789012345A15 /* OnboardingView.swift in Sources */,
+				A1B2C3D4E5F6789012345A16 /* SearchViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
