@@ -28,6 +28,7 @@ struct AreaManageView: View {
                 }
                 .onDelete(perform: deleteAreas)
             }
+            .animation(.default, value: areas.map(\.id))
             .navigationTitle("区域")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {

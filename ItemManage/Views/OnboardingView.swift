@@ -60,9 +60,11 @@ struct OnboardingView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(.systemGroupedBackground))
             }
         }
         .tabViewStyle(.page)
+        .background(Color(.systemGroupedBackground))
         .indexViewStyle(.page(backgroundDisplayMode: .always))
     }
 }

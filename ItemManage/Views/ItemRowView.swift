@@ -19,7 +19,7 @@ struct ItemRowView: View {
             HStack(spacing: 6) {
                 Text(ItemCostCalculator.formatDailyCost(item.dailyCost))
                     .font(.body.weight(.bold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppTheme.dailyCostColor)
 
                 Image(systemName: item.displayStatus.iconName)
                     .foregroundStyle(item.displayStatus.color)

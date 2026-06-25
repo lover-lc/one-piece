@@ -41,25 +41,32 @@ struct ItemListView: View {
     private var listContent: some View {
         if allItems.isEmpty {
             emptyState
+        } else if filterAreaID != nil && !hasMatchingFilteredItems {
+            filteredEmptyState
         } else {
             List {
-                ForEach(areas, id: \.id) { area in
-                    Section {
-                        ForEach(items(for: area), id: \.id) { item in
-                            NavigationLink {
-                                ItemDetailView(item: item)
-                            } label: {
-                                ItemRowView(item: item)
+                ForEach(displayedAreas, id: \.id) { area in
+                    let areaItems = items(for: area)
+                    if filterAreaID != nil || !areaItems.isEmpty {
+                        Section {
+                            ForEach(areaItems, id: \.id) { item in
+                                NavigationLink {
+                                    ItemDetailView(item: item)
+                                } label: {
+                                    ItemRowView(item: item)
+                                }
                             }
+                            .onDelete { indexSet in
+                                deleteItems(at: indexSet, in: area)
+                            }
+                        } header: {
+                            Text("\(area.name) (\(areaItems.count))")
                         }
-                        .onDelete { indexSet in
-                            deleteItems(at: indexSet, in: area)
-                        }
-                    } header: {
-                        Text("\(area.name) (\(items(for: area).count))")
                     }
                 }
             }
+            .animation(.default, value: filterAreaID)
+            .animation(.default, value: sortOption)
             .id(refreshID)
             .refreshable {
                 refreshID = UUID()
@@ -67,11 +74,30 @@ struct ItemListView: View {
         }
     }
 
+    private var displayedAreas: [Area] {
+        if let filterAreaID {
+            return areas.filter { $0.id == filterAreaID }
+        }
+        return areas
+    }
+
+    private var hasMatchingFilteredItems: Bool {
+        displayedAreas.contains { !items(for: $0).isEmpty }
+    }
+
     private var emptyState: some View {
         ContentUnavailableView {
             Label("暂无物品", systemImage: "shippingbox")
         } description: {
             Text("点击 + 添加第一个物品")
+        }
+    }
+
+    private var filteredEmptyState: some View {
+        ContentUnavailableView {
+            Label("暂无物品", systemImage: "line.3.horizontal.decrease.circle")
+        } description: {
+            Text("当前筛选条件下没有物品")
         }
     }
 
@@ -145,9 +171,11 @@ struct ItemListView: View {
 
     private func deleteItems(at offsets: IndexSet, in area: Area) {
         let areaItems = items(for: area)
-        for index in offsets {
-            modelContext.delete(areaItems[index])
+        withAnimation {
+            for index in offsets {
+                modelContext.delete(areaItems[index])
+            }
+            try? modelContext.save()
         }
-        try? modelContext.save()
     }
 }

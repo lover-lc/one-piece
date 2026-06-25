@@ -42,6 +42,8 @@ struct SearchView: View {
                     }
                 }
             }
+            .animation(.default, value: results.map(\.id))
+            .animation(.default, value: viewModel.sortOption)
         }
     }
 

@@ -19,7 +19,7 @@ enum SortDirection: String, CaseIterable {
     var label: String { self == .ascending ? "升序" : "降序" }
 }
 
-struct ItemSortOption {
+struct ItemSortOption: Equatable {
     var field: ItemSortField = .name
     var direction: SortDirection = .ascending
 

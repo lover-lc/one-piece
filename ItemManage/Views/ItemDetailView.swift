@@ -40,7 +40,7 @@ struct ItemDetailView: View {
                 LabeledContent("已使用天数", value: "\(item.usedDays) 天")
                 LabeledContent("每日成本") {
                     Text(ItemCostCalculator.formatDailyCost(item.dailyCost))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(AppTheme.dailyCostColor)
                 }
             }
         }
@@ -81,7 +81,7 @@ struct ItemDetailView: View {
     private var statusBadge: some View {
         HStack(spacing: 6) {
             Image(systemName: item.displayStatus.iconName)
-            Text(statusLabel)
+            Text(item.displayStatus.label)
         }
         .font(.subheadline.weight(.medium))
         .foregroundStyle(item.displayStatus.color)
@@ -91,15 +91,6 @@ struct ItemDetailView: View {
         .clipShape(Capsule())
         .frame(maxWidth: .infinity, alignment: .leading)
         .listRowBackground(Color.clear)
-    }
-
-    private var statusLabel: String {
-        switch item.displayStatus {
-        case .active: "使用中"
-        case .expiringSoon: "即将过期"
-        case .expired: "已过期"
-        case .usedUp: "已用完"
-        }
     }
 
     private func formatPrice(_ price: Decimal) -> String {
