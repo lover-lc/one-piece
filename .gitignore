@@ -29,3 +29,7 @@ Package.resolved
 
 # Cursor / IDE
 .cursor/
+
+# Git worktrees
+.worktrees/
+worktrees/
