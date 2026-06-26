@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { highlightNameParts, searchItems } from '../src/lib/search'
-import type { Area, Category, Item } from '../src/lib/types'
+import { highlightNameParts, searchItems } from '../src/modules/items/lib/search'
+import type { Area, Category, Item } from '../src/modules/items/lib/types'
 
 function makeItem(overrides: Partial<Item> = {}): Item {
   return {

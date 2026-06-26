@@ -5,7 +5,7 @@ import {
   parseBackupJson,
   validateBackupData,
   type BackupData,
-} from '../src/lib/backup'
+} from '../src/modules/items/lib/backup'
 
 const sampleBackup: BackupData = {
   version: BACKUP_VERSION,

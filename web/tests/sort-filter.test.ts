@@ -7,8 +7,8 @@ import {
   displayedAreas,
   filterItems,
   sortItems,
-} from '../src/lib/sort-filter'
-import type { Area, Category, Item } from '../src/lib/types'
+} from '../src/modules/items/lib/sort-filter'
+import type { Area, Category, Item } from '../src/modules/items/lib/types'
 
 const today = new Date('2026-06-26')
 

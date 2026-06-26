@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Apply initial migration to Supabase Postgres.
- * Usage: SUPABASE_DB_PASSWORD='...' node scripts/setup-supabase.mjs
+ * Usage: npm run db:migrate  (reads SUPABASE_DB_PASSWORD from .env.local)
  */
 import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'

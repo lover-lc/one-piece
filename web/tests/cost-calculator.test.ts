@@ -5,8 +5,8 @@ import {
   formatUnitPrice,
   unitPrice,
   usedDays,
-} from '../src/lib/cost-calculator'
-import { parseISODate } from '../src/lib/date-utils'
+} from '../src/modules/items/lib/cost-calculator'
+import { parseISODate } from '../src/shared/lib/date-utils'
 
 describe('usedDays', () => {
   it('returns 1 for same-day use', () => {

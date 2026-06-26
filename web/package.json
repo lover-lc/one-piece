@@ -9,7 +9,7 @@
     "lint": "oxlint",
     "preview": "vite preview",
     "test": "vitest run",
-    "db:migrate": "node scripts/setup-supabase.mjs"
+    "db:migrate": "node --env-file=.env.local scripts/setup-supabase.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.108.2",

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { parseISODate } from '../src/lib/date-utils'
+import { parseISODate } from '../src/shared/lib/date-utils'
 import {
   type ItemFormInput,
   validateItemForm,
-} from '../src/lib/validators'
+} from '../src/modules/items/lib/validators'
 
 const areaId = 'area-1'
 const categoryId = 'category-1'
