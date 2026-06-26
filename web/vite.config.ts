@@ -4,7 +4,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  base: '/item-manage/',
+  base: '/one-piece/',
   plugins: [
     react(),
     tailwindcss(),
@@ -17,8 +17,8 @@ export default defineConfig({
         theme_color: '#2c3e50',
         background_color: '#fafafa',
         display: 'standalone',
-        start_url: '/item-manage/',
-        scope: '/item-manage/',
+        start_url: '/one-piece/',
+        scope: '/one-piece/',
         icons: [
           {
             src: 'icons/icon-192.png',
