@@ -10,6 +10,31 @@ interface SceneState {
   isPointerLocked: boolean
   setPointerLocked: (locked: boolean) => void
 
+  isEditMode: boolean
+  setEditMode: (enabled: boolean) => void
+
+  selectedObjectId: string | null
+  setSelectedObjectId: (id: string | null) => void
+
+  transformMode: 'rotate' | 'scale'
+  setTransformMode: (mode: 'rotate' | 'scale') => void
+
+  draftTransformsById: Record<
+    string,
+    {
+      x: number
+      y: number
+      z: number
+      rotationY: number
+      scale: number
+    }
+  >
+  setDraftTransform: (
+    id: string,
+    transform: { x: number; y: number; z: number; rotationY: number; scale: number },
+  ) => void
+  clearDraftTransforms: () => void
+
   isSceneLoading: boolean
   setSceneLoading: (loading: boolean) => void
 
@@ -33,6 +58,22 @@ export const useSceneStore = create<SceneState>((set) => ({
 
   isPointerLocked: false,
   setPointerLocked: (locked) => set({ isPointerLocked: locked }),
+
+  isEditMode: false,
+  setEditMode: (enabled) => set({ isEditMode: enabled }),
+
+  selectedObjectId: null,
+  setSelectedObjectId: (id) => set({ selectedObjectId: id }),
+
+  transformMode: 'rotate',
+  setTransformMode: (mode) => set({ transformMode: mode }),
+
+  draftTransformsById: {},
+  setDraftTransform: (id, transform) =>
+    set((prev) => ({
+      draftTransformsById: { ...prev.draftTransformsById, [id]: transform },
+    })),
+  clearDraftTransforms: () => set({ draftTransformsById: {} }),
 
   isSceneLoading: true,
   setSceneLoading: (loading) => set({ isSceneLoading: loading }),

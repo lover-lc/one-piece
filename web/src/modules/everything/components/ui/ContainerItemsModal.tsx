@@ -3,6 +3,7 @@ import { X } from 'lucide-react'
 import { closeContainerModal, useSceneStore } from '../../store/scene-store'
 import { useContainer } from '../../hooks/use-containers'
 import { useContainerItems } from '../../hooks/use-container-items'
+import { useAreas } from '../../../items/hooks/use-areas'
 
 export default function ContainerItemsModal() {
   const navigate = useNavigate()
@@ -11,8 +12,10 @@ export default function ContainerItemsModal() {
 
   const { data: container } = useContainer(selectedContainerId ?? undefined)
   const { items, isEmpty, isLoading } = useContainerItems(selectedContainerId)
+  const { data: areas = [] } = useAreas()
 
   if (!showModal || !container) return null
+  const areaName = areas.find((a) => a.id === container.areaId)?.name ?? null
 
   const handleManageItems = () => {
     navigate(`/items?container=${container.id}`)
@@ -32,7 +35,9 @@ export default function ContainerItemsModal() {
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-bg-hover px-4 py-3">
-          <h2 className="text-lg font-semibold text-text">📦 {container.name}</h2>
+          <h2 className="text-lg font-semibold text-text">
+            📦 {areaName ? `${areaName} - ` : ''}{container.name}
+          </h2>
           <button
             onClick={handleClose}
             className="rounded p-1 hover:bg-bg-hover"

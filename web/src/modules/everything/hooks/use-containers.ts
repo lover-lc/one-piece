@@ -109,3 +109,26 @@ export function useDeleteContainer() {
     },
   })
 }
+
+export function useUpdateContainersBatch() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (
+      updates: Array<{ id: string; position_3d: unknown }>,
+    ): Promise<void> => {
+      if (!supabase) throw new Error('未配置 Supabase')
+
+      for (const u of updates) {
+        const { error } = await supabase
+          .from('containers')
+          .update({ position_3d: u.position_3d })
+          .eq('id', u.id)
+        if (error) throw error
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['containers'] })
+    },
+  })
+}

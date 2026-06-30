@@ -23,21 +23,11 @@ export default function Environment({ floorSize = [20, 20] }: EnvironmentProps) 
         <meshStandardMaterial color="#D2B48C" roughness={0.8} />
       </mesh>
 
+      {/* Corner demo: only two walls (north + west) */}
       <mesh position={[0, 1.5, -floorSize[1] / 2]} receiveShadow>
         <boxGeometry args={[floorSize[0], 3, 0.2]} />
         <meshStandardMaterial color="#F5F5DC" />
       </mesh>
-
-      <mesh position={[0, 1.5, floorSize[1] / 2]} receiveShadow>
-        <boxGeometry args={[floorSize[0], 3, 0.2]} />
-        <meshStandardMaterial color="#F5F5DC" />
-      </mesh>
-
-      <mesh position={[floorSize[0] / 2, 1.5, 0]} receiveShadow>
-        <boxGeometry args={[0.2, 3, floorSize[1]]} />
-        <meshStandardMaterial color="#F5F5DC" />
-      </mesh>
-
       <mesh position={[-floorSize[0] / 2, 1.5, 0]} receiveShadow>
         <boxGeometry args={[0.2, 3, floorSize[1]]} />
         <meshStandardMaterial color="#F5F5DC" />

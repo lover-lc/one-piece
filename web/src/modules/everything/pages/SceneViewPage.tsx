@@ -5,6 +5,7 @@ import SceneCanvas from '../components/scene/SceneCanvas'
 import ControlsHint from '../components/ui/ControlsHint'
 import ContainerItemsModal from '../components/ui/ContainerItemsModal'
 import WebGLUnsupportedPage from '../components/WebGLUnsupportedPage'
+import EditorToolbar from '../components/editor/EditorToolbar'
 import { useHasScene } from '../hooks/use-scene-config'
 import { isWebGLSupported } from '../lib/webgl-check'
 
@@ -33,6 +34,7 @@ export default function SceneViewPage() {
   return (
     <SceneErrorBoundary>
       <SceneCanvas />
+      <EditorToolbar />
       <ControlsHint />
       <ContainerItemsModal />
     </SceneErrorBoundary>

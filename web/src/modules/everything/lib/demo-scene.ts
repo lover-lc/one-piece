@@ -4,7 +4,7 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   id: 'default-scene',
   version: 1,
   camera: {
-    position: [0, 1.6, 5],
+    position: [1.8, 1.4, 1.8],
     rotation: [0, 0, 0],
   },
   lighting: {
@@ -17,13 +17,11 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
   environment: {
     floor: {
       material: 'wood',
-      size: [20, 20],
+      size: [6, 6],
     },
     walls: [
-      { id: 'wall-north', points: [[-10, 10], [10, 10]], height: 3 },
-      { id: 'wall-south', points: [[-10, -10], [10, -10]], height: 3 },
-      { id: 'wall-east', points: [[10, -10], [10, 10]], height: 3 },
-      { id: 'wall-west', points: [[-10, -10], [-10, 10]], height: 3 },
+      { id: 'wall-north', points: [[-3, -3], [3, -3]], height: 3 },
+      { id: 'wall-west', points: [[-3, -3], [-3, 3]], height: 3 },
     ],
   },
   lastModified: Date.now(),
@@ -32,60 +30,11 @@ export const DEFAULT_SCENE_CONFIG: SceneConfig = {
 export function getDemoContainers(clientRoomAreaId: string): ContainerInsert[] {
   return [
     {
-      name: '客厅电视柜',
+      name: '沙发',
       areaId: clientRoomAreaId,
-      position: { x: 0, y: 0, z: -8, rotationY: 0, scale: 1 },
-      modelRef: 'cabinet_tv',
-      modelType: 'builtin',
-    },
-    {
-      name: '客厅书架左',
-      areaId: clientRoomAreaId,
-      position: { x: -7, y: 0, z: -5, rotationY: Math.PI / 2, scale: 1 },
-      modelRef: 'bookshelf',
-      modelType: 'builtin',
-    },
-    {
-      name: '客厅书架右',
-      areaId: clientRoomAreaId,
-      position: { x: 7, y: 0, z: -5, rotationY: -Math.PI / 2, scale: 1 },
-      modelRef: 'bookshelf',
-      modelType: 'builtin',
-    },
-    {
-      name: '玄关鞋柜',
-      areaId: clientRoomAreaId,
-      position: { x: -5, y: 0, z: 8, rotationY: Math.PI, scale: 1 },
-      modelRef: 'shoe_cabinet',
-      modelType: 'builtin',
-    },
-    {
-      name: '餐边柜',
-      areaId: clientRoomAreaId,
-      position: { x: 5, y: 0, z: 5, rotationY: Math.PI, scale: 1 },
-      modelRef: 'sideboard',
-      modelType: 'builtin',
-    },
-    {
-      name: '储物箱1',
-      areaId: clientRoomAreaId,
-      position: { x: -3, y: 0, z: 0, rotationY: 0, scale: 1 },
-      modelRef: 'storage_box',
-      modelType: 'builtin',
-    },
-    {
-      name: '储物箱2',
-      areaId: clientRoomAreaId,
-      position: { x: 3, y: 0, z: 0, rotationY: 0, scale: 1 },
-      modelRef: 'storage_box',
-      modelType: 'builtin',
-    },
-    {
-      name: '抽屉柜',
-      areaId: clientRoomAreaId,
-      position: { x: 0, y: 0, z: 3, rotationY: Math.PI, scale: 1 },
-      modelRef: 'drawer_chest',
-      modelType: 'builtin',
+      position: { x: -1.4, y: 0, z: -1.4, rotationY: 0, scale: 1 },
+      modelRef: 'everything-models/sofa_glb.glb',
+      modelType: 'custom',
     },
   ]
 }
