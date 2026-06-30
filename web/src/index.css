@@ -231,6 +231,18 @@ textarea {
   opacity: 0;
 }
 
+.rdp-root {
+  --rdp-accent-color: var(--primary);
+  --rdp-accent-background-color: color-mix(in oklab, var(--primary) 12%, transparent);
+  font-size: 0.875rem;
+  width: fit-content;
+  margin-inline: auto;
+}
+
+.rdp-root .rdp-day_button {
+  border-radius: 0.5rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -239,6 +251,29 @@ textarea {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+@keyframes gantt-today-highlight {
+  0% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.gantt-today-highlight {
+  animation: gantt-today-highlight 1s ease-out forwards;
+}
+
+.gantt-scroll-x-hidden {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.gantt-scroll-x-hidden::-webkit-scrollbar {
+  width: 6px;
+  height: 0;
 }
 
 @layer base {

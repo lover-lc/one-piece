@@ -1,12 +1,15 @@
 import { Plus } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import SwipeRow from '../../../shared/components/ui/SwipeRow'
+import { DEFAULT_TODO_LIST_COLOR } from '../lib/todo-list-colors'
 import type { TodoList } from '../types/todo-types'
+import { ListColorPicker } from './ListColorPicker'
 
 function NamePromptDialog({
   title,
   message,
   defaultValue = '',
+  defaultColor = DEFAULT_TODO_LIST_COLOR,
   confirmLabel,
   onCancel,
   onConfirm,
@@ -15,18 +18,25 @@ function NamePromptDialog({
   title: string
   message: string
   defaultValue?: string
+  defaultColor?: string
   confirmLabel: string
   onCancel: () => void
-  onConfirm: (name: string) => void
+  onConfirm: (name: string, color: string) => void
   isPending?: boolean
 }) {
   const [name, setName] = useState(defaultValue)
+  const [color, setColor] = useState(defaultColor)
+
+  useEffect(() => {
+    setName(defaultValue)
+    setColor(defaultColor)
+  }, [defaultValue, defaultColor])
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     const trimmed = name.trim()
     if (!trimmed) return
-    onConfirm(trimmed)
+    onConfirm(trimmed, color)
   }
 
   return (
@@ -49,6 +59,10 @@ function NamePromptDialog({
           autoFocus
           className="mt-4 w-full rounded-button border border-bg-hover bg-bg px-3 py-2.5 text-sm text-text outline-none focus:border-primary/30"
         />
+        <div className="mt-4">
+          <label className="mb-2 block text-xs text-text-secondary">颜色</label>
+          <ListColorPicker value={color} onChange={setColor} />
+        </div>
         <div className="mt-6 flex justify-end gap-3">
           <button
             type="button"
@@ -117,9 +131,14 @@ function ListSection({
                   <div className="flex items-center gap-2 bg-card px-4 py-3">
                     <span
                       className="size-3 shrink-0 rounded-full"
-                      style={{ backgroundColor: list.color ?? '#6366f1' }}
+                      style={{ backgroundColor: list.color ?? DEFAULT_TODO_LIST_COLOR }}
                     />
                     <span className="min-w-0 flex-1 truncate text-sm">{list.name}</span>
+                    {list.visibility === 'shared' ? (
+                      <span className="shrink-0 rounded-full bg-bg-hover px-2 py-0.5 text-xs text-text-secondary">
+                        共享
+                      </span>
+                    ) : null}
                     <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
                       {count}
                     </span>
@@ -137,9 +156,9 @@ function ListSection({
 type TodoListManageProps = {
   lists: TodoList[]
   todoCounts: Record<string, number>
-  onAdd: (name: string) => Promise<void>
-  onAddShared?: (name: string) => Promise<void>
-  onRename: (id: string, name: string) => Promise<void>
+  onAdd: (name: string, color: string) => Promise<void>
+  onAddShared?: (name: string, color: string) => Promise<void>
+  onRename: (id: string, name: string, color: string) => Promise<void>
   onDeleteRequest: (list: TodoList) => void
   isLoading?: boolean
 }
@@ -161,13 +180,13 @@ export default function TodoListManage({
   const privateLists = lists.filter((l) => l.visibility === 'private')
   const sharedLists = lists.filter((l) => l.visibility === 'shared')
 
-  async function handleAdd(name: string) {
+  async function handleAdd(name: string, color: string) {
     setIsSubmitting(true)
     try {
       if (addMode === 'shared' && onAddShared) {
-        await onAddShared(name)
+        await onAddShared(name, color)
       } else {
-        await onAdd(name)
+        await onAdd(name, color)
       }
       setShowAddDialog(false)
     } finally {
@@ -175,11 +194,11 @@ export default function TodoListManage({
     }
   }
 
-  async function handleRename(name: string) {
+  async function handleRename(name: string, color: string) {
     if (!listToRename) return
     setIsSubmitting(true)
     try {
-      await onRename(listToRename.id, name)
+      await onRename(listToRename.id, name, color)
       setListToRename(null)
     } finally {
       setIsSubmitting(false)
@@ -235,9 +254,10 @@ export default function TodoListManage({
 
       {listToRename ? (
         <NamePromptDialog
-          title="重命名清单"
-          message="请输入新的清单名称"
+          title="编辑清单"
+          message="修改名称或颜色"
           defaultValue={listToRename.name}
+          defaultColor={listToRename.color ?? DEFAULT_TODO_LIST_COLOR}
           confirmLabel="保存"
           onCancel={() => setListToRename(null)}
           onConfirm={handleRename}

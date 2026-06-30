@@ -25,6 +25,8 @@ export type TodoListVisibility = 'private' | 'shared'
 export type RecurrenceRule = {
   frequency: 'daily' | 'weekly' | 'monthly' | 'custom'
   interval: number
+  /** 1=周一 … 7=周日 */
+  weekdays?: number[]
   endType: 'never' | 'date' | 'count'
   endDate?: string
   endCount?: number
@@ -35,6 +37,9 @@ export type NegotiationSnapshot = {
   title: string
   description: string | null
   priority: TodoPriority | null
+  isAllDay: boolean
+  startAt: string | null
+  dueAt: string | null
   startDate: string | null
   dueDate: string | null
   tagIds: string[]
@@ -66,6 +71,9 @@ export type TodoItem = {
   creatorId: string
   assigneeId: string
   priority: TodoPriority | null
+  isAllDay: boolean
+  startAt: string | null
+  dueAt: string | null
   startDate: string | null
   dueDate: string | null
   requireFeedback: boolean
@@ -111,6 +119,9 @@ export type TodoFormInput = {
   sharedListId?: string | null
   assigneeId: string
   priority?: TodoPriority | null
+  isAllDay?: boolean
+  startAt?: string | null
+  dueAt?: string | null
   startDate?: string
   dueDate?: string | null
   requireFeedback: boolean

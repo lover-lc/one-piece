@@ -1,7 +1,14 @@
 import { ChevronRight, Plus } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Checkbox } from '@/components/ui/checkbox'
 import BottomSheet from '../../../shared/components/ui/BottomSheet'
+import DateField, {
+  dateFieldFromIso,
+  isoFromDateField,
+  type DateFieldValue,
+} from '../../../shared/components/DateField'
+import { isoToLocalDate } from '../../../shared/lib/datetime-utils'
 import MemberAvatar from '../../../shared/components/MemberAvatar'
 import PageHeaderBar from '../../../shared/components/PageHeaderBar'
 import { useCurrentMember } from '../../../shared/hooks/use-current-member'
@@ -41,15 +48,24 @@ import {
 } from '../lib/negotiation-ui'
 import {
   formatReminderSelectionLabel,
-  mergeReminderPresets,
+  getEnabledReminderOptions,
+  REMINDER_NONE_ID,
   resolveReminderAt,
   type ReminderSelection,
 } from '../lib/reminder-presets'
+import {
+  findRecurrencePreset,
+  formatRecurrenceRuleSummary,
+  getOrderedRecurrencePresets,
+  matchRecurrencePresetId,
+  presetToRecurrenceRule,
+} from '../lib/recurrence-presets'
 import { useTodoUiStore } from '../store/todo-ui-store'
 import {
   getLatestStatusReason,
   isReasonStatus,
 } from '../lib/todo-status-reason'
+import { DEFAULT_TODO_LIST_COLOR } from '../lib/todo-list-colors'
 import type { RecurrenceRule, TodoFormInput, TodoPriority } from '../types/todo-types'
 import { cn } from '@/lib/utils'
 
@@ -62,14 +78,7 @@ const PRIORITY_OPTIONS: { id: string; name: string }[] = [
   { id: 'low', name: '低' },
 ]
 
-const RECURRENCE_OPTIONS: { id: string; name: string }[] = [
-  { id: 'none', name: '不重复' },
-  { id: 'daily', name: '每天' },
-  { id: 'weekly', name: '每周' },
-  { id: 'monthly', name: '每月' },
-]
-
-const REMINDER_NONE_ID = '__none__'
+const REMINDER_NONE_ID_LOCAL = REMINDER_NONE_ID
 
 const fieldInputClass =
   'w-full rounded-button border border-bg-hover bg-bg px-3 py-2 text-sm text-text outline-none focus:border-primary'
@@ -99,9 +108,11 @@ function FormRow({
     <div
       ref={rowRef}
       className={cn(
-        'px-4 py-2.5',
+        'px-4 py-2',
         error && 'bg-status-expired/5 ring-2 ring-inset ring-status-expired/40',
-        highlighted && !error && 'bg-primary/8',
+        highlighted &&
+          !error &&
+          'bg-amber-50 ring-1 ring-inset ring-amber-200 dark:bg-amber-950/30 dark:ring-amber-800/50',
       )}
     >
       <label className="mb-1 block text-xs text-text-secondary">{label}</label>
@@ -192,59 +203,6 @@ function QuickAddSheet({
   )
 }
 
-function CustomReminderSheet({
-  open,
-  initialAt,
-  onClose,
-  onConfirm,
-}: {
-  open: boolean
-  initialAt: string
-  onClose: () => void
-  onConfirm: (at: string) => void
-}) {
-  const [value, setValue] = useState(initialAt)
-
-  useEffect(() => {
-    if (open) setValue(initialAt)
-  }, [open, initialAt])
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    if (!value) return
-    onConfirm(value)
-  }
-
-  return (
-    <BottomSheet open={open} onClose={onClose} title="自定义提醒时间">
-      <form onSubmit={handleSubmit} className="space-y-4 p-4">
-        <input
-          type="datetime-local"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          className={fieldInputClass}
-        />
-        <div className="flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-button px-4 py-2 text-sm text-text-secondary hover:bg-bg-hover"
-          >
-            取消
-          </button>
-          <button
-            type="submit"
-            disabled={!value}
-            className="rounded-button bg-primary px-4 py-2 text-sm text-white hover:opacity-90 disabled:opacity-50"
-          >
-            确定
-          </button>
-        </div>
-      </form>
-    </BottomSheet>
-  )
-}
-
 function OptionSheet({
   open,
   title,
@@ -260,7 +218,13 @@ function OptionSheet({
 }: {
   open: boolean
   title: string
-  options: { id: string; name: string; member?: FamilyMember }[]
+  options: {
+    id: string
+    name: string
+    member?: FamilyMember
+    color?: string | null
+    badge?: string
+  }[]
   selectedId: string | null
   onSelect: (id: string) => void
   onClose: () => void
@@ -288,7 +252,18 @@ function OptionSheet({
               {showMemberAvatar && opt.member ? (
                 <MemberAvatar member={opt.member} size="sm" />
               ) : null}
+              {opt.color ? (
+                <span
+                  className="size-3 shrink-0 rounded-full"
+                  style={{ backgroundColor: opt.color }}
+                />
+              ) : null}
               <span className="min-w-0 flex-1 truncate">{opt.name}</span>
+              {opt.badge ? (
+                <span className="shrink-0 rounded-full bg-bg-hover px-2 py-0.5 text-xs text-text-secondary">
+                  {opt.badge}
+                </span>
+              ) : null}
             </button>
           </li>
         ))}
@@ -343,16 +318,26 @@ export default function TodoFormPage() {
   const lastUsedListId = useTodoUiStore((s) => s.lastUsedListId)
   const setLastUsedListId = useTodoUiStore((s) => s.setLastUsedListId)
   const customReminderPresets = useTodoUiStore((s) => s.reminderPresets)
+  const reminderPresetOrder = useTodoUiStore((s) => s.reminderPresetOrder)
+  const reminderPresetDisabled = useTodoUiStore((s) => s.reminderPresetDisabled)
+  const customRecurrencePresets = useTodoUiStore((s) => s.recurrencePresets)
+  const recurrencePresetOrder = useTodoUiStore((s) => s.recurrencePresetOrder)
+  const recurrencePresetDisabled = useTodoUiStore((s) => s.recurrencePresetDisabled)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [listId, setListId] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
   const [priority, setPriority] = useState<TodoPriority | ''>('')
-  const [startDate, setStartDate] = useState('')
-  const [dueDate, setDueDate] = useState('')
+  const [isAllDay, setIsAllDay] = useState(false)
+  const [startField, setStartField] = useState<DateFieldValue>({ iso: null, hasTime: false })
+  const [dueField, setDueField] = useState<DateFieldValue>({ iso: null, hasTime: false })
   const [tagIds, setTagIds] = useState<string[]>([])
-  const [recurrence, setRecurrence] = useState<'none' | 'daily' | 'weekly' | 'monthly'>('none')
+  const [selectedRecurrencePresetId, setSelectedRecurrencePresetId] = useState('builtin:none')
+  const [preservedRecurrenceRule, setPreservedRecurrenceRule] = useState<RecurrenceRule | null>(
+    null,
+  )
+  const [recurrenceUserChanged, setRecurrenceUserChanged] = useState(false)
   const [reminderSelection, setReminderSelection] = useState<ReminderSelection>({ type: 'none' })
   const [error, setError] = useState<string | null>(null)
   const [updateSeries, setUpdateSeries] = useState(false)
@@ -362,7 +347,6 @@ export default function TodoFormPage() {
   const [prioritySheetOpen, setPrioritySheetOpen] = useState(false)
   const [recurrenceSheetOpen, setRecurrenceSheetOpen] = useState(false)
   const [reminderSheetOpen, setReminderSheetOpen] = useState(false)
-  const [customReminderSheetOpen, setCustomReminderSheetOpen] = useState(false)
   const [newTagSheetOpen, setNewTagSheetOpen] = useState(false)
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
   const [rejectReason, setRejectReason] = useState('')
@@ -388,19 +372,32 @@ export default function TodoFormPage() {
     setListId(effectiveListIdFromTodo(existing))
     setAssigneeId(existing.assigneeId)
     setPriority(source?.priority ?? existing.priority ?? '')
-    setStartDate(source?.startDate ?? existing.startDate ?? '')
-    setDueDate(source?.dueDate ?? existing.dueDate ?? '')
-    setTagIds(
-      source?.tagIds ?? existing.tags?.map((t) => t.id) ?? [],
+    setIsAllDay(source?.isAllDay ?? existing.isAllDay)
+    setStartField(
+      dateFieldFromIso(
+        source?.startAt ?? existing.startAt,
+        source?.isAllDay ?? existing.isAllDay,
+      ),
     )
-    if (source?.recurrence && source.recurrence !== 'none') {
-      setRecurrence(source.recurrence)
-    } else if (existing.recurrenceRule) {
-      setRecurrence(existing.recurrenceRule.frequency as typeof recurrence)
+    setDueField(
+      dateFieldFromIso(source?.dueAt ?? existing.dueAt, source?.isAllDay ?? existing.isAllDay),
+    )
+    setTagIds(source?.tagIds ?? existing.tags?.map((t) => t.id) ?? [])
+
+    const recurrenceRule = source?.recurrenceRule ?? existing.recurrenceRule
+    const matched = matchRecurrencePresetId(recurrenceRule, customRecurrencePresets)
+    if (matched) {
+      setSelectedRecurrencePresetId(matched)
+      setPreservedRecurrenceRule(null)
+    } else if (recurrenceRule) {
+      setSelectedRecurrencePresetId('builtin:none')
+      setPreservedRecurrenceRule(recurrenceRule)
     } else {
-      setRecurrence('none')
+      setSelectedRecurrencePresetId('builtin:none')
+      setPreservedRecurrenceRule(null)
     }
-  }, [existing, currentMemberId])
+    setRecurrenceUserChanged(false)
+  }, [existing, currentMemberId, customRecurrencePresets])
 
   const selectableLists = lists
 
@@ -418,15 +415,25 @@ export default function TodoFormPage() {
   const selectedList = lists.find((l) => l.id === listId) ?? null
   const selectedListName = selectedList ? listOptionLabel(selectedList) : null
   const selectedAssignee = members.find((m) => m.id === assigneeId) ?? null
-  const reminderPresets = mergeReminderPresets(customReminderPresets)
-  const reminderOptions = [
-    { id: REMINDER_NONE_ID, name: '不提醒' },
-    ...reminderPresets.map((p) => ({ id: p.id, name: p.name })),
-  ]
+  const reminderOptions = getEnabledReminderOptions(
+    customReminderPresets,
+    reminderPresetOrder,
+    reminderPresetDisabled,
+  )
+  const recurrenceOptions = getOrderedRecurrencePresets(
+    customRecurrencePresets,
+    recurrencePresetOrder,
+    recurrencePresetDisabled,
+    { enabledOnly: true },
+  ).map((p) => ({ id: p.id, name: p.name }))
   const selectedPriorityName =
     PRIORITY_OPTIONS.find((o) => o.id === priority)?.name ?? null
   const selectedRecurrenceName =
-    RECURRENCE_OPTIONS.find((o) => o.id === recurrence)?.name ?? null
+    selectedRecurrencePresetId !== 'builtin:none'
+      ? (findRecurrencePreset(selectedRecurrencePresetId, customRecurrencePresets)?.name ?? null)
+      : preservedRecurrenceRule
+        ? formatRecurrenceRuleSummary(preservedRecurrenceRule)
+        : '不重复'
   const selectedReminderName =
     reminderSelection.type === 'none'
       ? '不提醒'
@@ -447,14 +454,34 @@ export default function TodoFormPage() {
   const canDelete =
     isEdit && existing ? canDeleteTodo(existing, currentMemberId) : false
 
+  const startAt = isoFromDateField(startField, isAllDay)
+  const dueAt = isoFromDateField(dueField, isAllDay)
+  const startDate = startAt ? isoToLocalDate(startAt) ?? '' : ''
+  const dueDate = dueAt ? isoToLocalDate(dueAt) ?? '' : ''
+
+  function resolveRecurrenceRule(): RecurrenceRule | null {
+    if (selectedRecurrencePresetId !== 'builtin:none') {
+      const preset = findRecurrencePreset(selectedRecurrencePresetId, customRecurrencePresets)
+      return preset ? presetToRecurrenceRule(preset, existing?.recurrenceRule) : null
+    }
+    if (recurrenceUserChanged) return null
+    return preservedRecurrenceRule
+  }
+
+  const effectiveRecurrenceRule = resolveRecurrenceRule()
+
   const formState: NegotiationFormState = {
     title,
     description,
     priority,
+    isAllDay,
+    startAt,
+    dueAt,
     startDate,
     dueDate,
     tagIds,
-    recurrence,
+    selectedRecurrencePresetId,
+    recurrenceRule: effectiveRecurrenceRule,
   }
 
   const changedFields =
@@ -471,18 +498,10 @@ export default function TodoFormPage() {
     isSaving || saveNegotiation.isPending || statusAction.isPending || deleteTodo.isPending
 
   function buildFormInput(): TodoFormInput {
-    let recurrenceRule: RecurrenceRule | null = null
-    if (recurrence !== 'none') {
-      recurrenceRule = {
-        frequency: recurrence,
-        interval: 1,
-        endType: 'never',
-        generatedCount: 0,
-      }
-    }
+    const recurrenceRule = resolveRecurrenceRule()
     const { privateListId, sharedListId } = listFormToPlacements(listId, lists)
     const customRemindAt =
-      resolveReminderAt(reminderSelection, dueDate, customReminderPresets) ?? undefined
+      resolveReminderAt(reminderSelection, dueDate || null, customReminderPresets) ?? undefined
     return {
       title,
       description,
@@ -490,6 +509,9 @@ export default function TodoFormPage() {
       sharedListId,
       assigneeId,
       priority: priority || null,
+      isAllDay,
+      startAt,
+      dueAt,
       startDate: startDate || undefined,
       dueDate: dueDate || null,
       requireFeedback,
@@ -510,6 +532,9 @@ export default function TodoFormPage() {
     if (!title.trim()) nextFieldErrors.title = '标题不能为空'
     if (!listId) nextFieldErrors.listId = '请选择清单'
     if (!assigneeId) nextFieldErrors.assigneeId = '请选择负责人'
+    if (isAllDay && !dueAt) {
+      nextFieldErrors.dateRange = '全天待办请选择截止日期'
+    }
     if (startDate && dueDate && dueDate < startDate) {
       nextFieldErrors.dateRange = '截止日期不能早于开始日期'
     }
@@ -827,7 +852,11 @@ export default function TodoFormPage() {
   }
 
   async function handleAddList(name: string) {
-    const list = await createList.mutateAsync({ name, visibility: 'private' })
+    const list = await createList.mutateAsync({
+      name,
+      visibility: 'private',
+      color: DEFAULT_TODO_LIST_COLOR,
+    })
     setListId(list.id)
     setLastUsedListId(list.id)
     setNewListSheetOpen(false)
@@ -856,7 +885,7 @@ export default function TodoFormPage() {
   }
 
   return (
-    <div className="min-h-svh bg-bg pb-8">
+    <div className="flex h-dvh flex-col overflow-hidden bg-bg">
       <PageHeaderBar
         leading={header.leading}
         title={isEdit ? undefined : '新建待办'}
@@ -865,7 +894,7 @@ export default function TodoFormPage() {
       />
 
       {statusReasonLog && existing && isReasonStatus(existing.status) ? (
-        <div className="px-4 pt-3">
+        <div className="shrink-0 px-4 pt-2">
           <TodoStatusReasonBanner
             status={existing.status}
             log={statusReasonLog}
@@ -876,10 +905,11 @@ export default function TodoFormPage() {
 
       <div
         className={cn(
-          'space-y-3 px-4 py-3',
+          'min-h-0 flex-1 overflow-y-auto',
           fieldsLocked && 'pointer-events-none opacity-90',
         )}
       >
+        <div className="space-y-3 px-4 py-2">
         <FormCard>
           <FormRow
             label="标题 *"
@@ -901,7 +931,7 @@ export default function TodoFormPage() {
               onChange={(e) => setDescription(e.target.value)}
               placeholder="备注"
               className={fieldInputClass}
-              rows={3}
+              rows={2}
             />
           </FormRow>
           <FormRow
@@ -914,10 +944,104 @@ export default function TodoFormPage() {
               onClick={() => setListSheetOpen(true)}
             />
           </FormRow>
-          <FormRow label="优先级" highlighted={changedFields.has('priority')}>
+          <div className="grid grid-cols-2 gap-0 divide-x divide-bg-hover">
+            <FormRow
+              label="负责人 *"
+              error={fieldErrors.assigneeId}
+              rowRef={assigneeRowRef}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  if (isEdit && assignsToOther) return
+                  setAssigneeSheetOpen(true)
+                }}
+                disabled={isEdit && assignsToOther}
+                className={cn(
+                  'flex w-full min-w-0 items-center justify-between rounded-button border border-bg-hover bg-bg px-3 py-2 text-left text-sm',
+                  isEdit && assignsToOther && 'opacity-60',
+                )}
+              >
+                <span className="flex min-w-0 items-center gap-2">
+                  {selectedAssignee ? (
+                    <>
+                      <MemberAvatar member={selectedAssignee} size="sm" />
+                      <span className="truncate text-text">{selectedAssignee.name}</span>
+                    </>
+                  ) : (
+                    <span className="truncate text-text-tertiary">请选择</span>
+                  )}
+                </span>
+                <ChevronRight className="size-4 shrink-0 text-text-tertiary" />
+              </button>
+            </FormRow>
+            <FormRow label="优先级" highlighted={changedFields.has('priority')}>
+              <PickerButton
+                value={selectedPriorityName}
+                onClick={() => setPrioritySheetOpen(true)}
+              />
+            </FormRow>
+          </div>
+          <div ref={dateRowRef}>
+            <FormRow label="全天">
+              <label className="inline-flex items-center gap-2 text-sm">
+                <Checkbox
+                  checked={isAllDay}
+                  onCheckedChange={(v) => {
+                    const next = v === true
+                    setIsAllDay(next)
+                    if (!next) {
+                      setStartField((prev) => (prev.iso ? { ...prev, hasTime: true } : prev))
+                      setDueField((prev) => (prev.iso ? { ...prev, hasTime: true } : prev))
+                    }
+                  }}
+                />
+                <span>全天</span>
+              </label>
+              {isAllDay ? (
+                <p className="mt-1 text-xs text-text-tertiary">
+                  全天模式下仅选日期；取消勾选后可设置具体时间
+                </p>
+              ) : null}
+            </FormRow>
+            <FormRow
+              label="开始日期"
+              highlighted={changedFields.has('startAt') || changedFields.has('startDate')}
+            >
+              <DateField
+                value={startField}
+                onChange={setStartField}
+                showTime={!isAllDay}
+                allowClear
+                placeholder="可选"
+              />
+            </FormRow>
+            <FormRow
+              label={isAllDay ? '截止日期 *' : '截止'}
+              highlighted={changedFields.has('dueAt') || changedFields.has('dueDate')}
+            >
+              <DateField
+                value={dueField}
+                onChange={setDueField}
+                showTime={!isAllDay}
+                allowClear={!isAllDay}
+                placeholder={isAllDay ? '必选' : '可选'}
+              />
+            </FormRow>
+            {fieldErrors.dateRange ? (
+              <p className="px-4 pb-2 text-xs text-status-expired">{fieldErrors.dateRange}</p>
+            ) : null}
+          </div>
+          <FormRow label="重复" highlighted={changedFields.has('recurrenceRule')}>
             <PickerButton
-              value={selectedPriorityName}
-              onClick={() => setPrioritySheetOpen(true)}
+              value={selectedRecurrenceName}
+              onClick={() => setRecurrenceSheetOpen(true)}
+            />
+          </FormRow>
+          <FormRow label="提醒">
+            <PickerButton
+              value={selectedReminderName}
+              onClick={() => setReminderSheetOpen(true)}
             />
           </FormRow>
           <FormRow label="标签" highlighted={changedFields.has('tagIds')}>
@@ -967,65 +1091,6 @@ export default function TodoFormPage() {
               </>
             )}
           </FormRow>
-          <div ref={dateRowRef}>
-            <FormRow label="开始日期" highlighted={changedFields.has('startDate')}>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className={fieldInputClass}
-              />
-            </FormRow>
-            <FormRow label="截止日期" highlighted={changedFields.has('dueDate')}>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className={fieldInputClass}
-              />
-            </FormRow>
-            {fieldErrors.dateRange ? (
-              <p className="px-4 pb-2 text-xs text-status-expired">{fieldErrors.dateRange}</p>
-            ) : null}
-          </div>
-          <FormRow label="重复" highlighted={changedFields.has('recurrenceRule')}>
-            <PickerButton
-              value={selectedRecurrenceName}
-              onClick={() => setRecurrenceSheetOpen(true)}
-            />
-          </FormRow>
-          <FormRow label="提醒">
-            <PickerButton
-              value={selectedReminderName}
-              onClick={() => setReminderSheetOpen(true)}
-            />
-          </FormRow>
-          <FormRow label="负责人 *" error={fieldErrors.assigneeId} rowRef={assigneeRowRef}>
-            <button
-              type="button"
-              onClick={() => {
-                if (isEdit && assignsToOther) return
-                setAssigneeSheetOpen(true)
-              }}
-              disabled={isEdit && assignsToOther}
-              className={cn(
-                'flex w-full min-w-0 items-center justify-between rounded-button border border-bg-hover bg-bg px-3 py-2 text-left text-sm',
-                isEdit && assignsToOther && 'opacity-60',
-              )}
-            >
-              <span className="flex min-w-0 items-center gap-2">
-                {selectedAssignee ? (
-                  <>
-                    <MemberAvatar member={selectedAssignee} size="sm" />
-                    <span className="truncate text-text">{selectedAssignee.name}</span>
-                  </>
-                ) : (
-                  <span className="truncate text-text-tertiary">请选择</span>
-                )}
-              </span>
-              <ChevronRight className="size-4 shrink-0 text-text-tertiary" />
-            </button>
-          </FormRow>
         </FormCard>
 
         {isEdit && (existing?.recurrenceRule || existing?.parentRecurrenceId) ? (
@@ -1044,6 +1109,7 @@ export default function TodoFormPage() {
             {error}
           </p>
         ) : null}
+        </div>
       </div>
 
       <TodoActionDialog
@@ -1072,7 +1138,12 @@ export default function TodoFormPage() {
       <OptionSheet
         open={listSheetOpen}
         title="选择清单"
-        options={selectableLists.map((l) => ({ id: l.id, name: listOptionLabel(l) }))}
+        options={selectableLists.map((l) => ({
+          id: l.id,
+          name: listOptionLabel(l),
+          color: l.color,
+          badge: l.visibility === 'shared' ? '共享' : undefined,
+        }))}
         selectedId={listId || null}
         onSelect={setListId}
         onClose={() => setListSheetOpen(false)}
@@ -1105,10 +1176,16 @@ export default function TodoFormPage() {
       <OptionSheet
         open={recurrenceSheetOpen}
         title="选择重复"
-        options={RECURRENCE_OPTIONS}
-        selectedId={recurrence}
-        onSelect={(id) => setRecurrence(id as typeof recurrence)}
+        options={recurrenceOptions}
+        selectedId={selectedRecurrencePresetId}
+        onSelect={(id) => {
+          setRecurrenceUserChanged(true)
+          setSelectedRecurrencePresetId(id)
+          setPreservedRecurrenceRule(null)
+        }}
         onClose={() => setRecurrenceSheetOpen(false)}
+        manageHref="/todos/manage?tab=recurrence"
+        manageLabel="管理重复预设"
       />
 
       <OptionSheet
@@ -1117,42 +1194,21 @@ export default function TodoFormPage() {
         options={reminderOptions}
         selectedId={
           reminderSelection.type === 'none'
-            ? REMINDER_NONE_ID
+            ? REMINDER_NONE_ID_LOCAL
             : reminderSelection.type === 'preset'
               ? reminderSelection.presetId
-              : '__custom__'
+              : REMINDER_NONE_ID_LOCAL
         }
         onSelect={(id) => {
-          if (id === REMINDER_NONE_ID) {
+          if (id === REMINDER_NONE_ID_LOCAL) {
             setReminderSelection({ type: 'none' })
             return
           }
           setReminderSelection({ type: 'preset', presetId: id })
         }}
         onClose={() => setReminderSheetOpen(false)}
-        onAddNew={() => {
-          setReminderSheetOpen(false)
-          setCustomReminderSheetOpen(true)
-        }}
-        addLabel="自定义时间…"
         manageHref="/todos/manage?tab=reminders"
         manageLabel="管理提醒预设"
-      />
-
-      <CustomReminderSheet
-        open={customReminderSheetOpen}
-        initialAt={
-          reminderSelection.type === 'datetime'
-            ? reminderSelection.at
-            : dueDate
-              ? `${dueDate}T09:00`
-              : ''
-        }
-        onClose={() => setCustomReminderSheetOpen(false)}
-        onConfirm={(at) => {
-          setReminderSelection({ type: 'datetime', at })
-          setCustomReminderSheetOpen(false)
-        }}
       />
 
       <QuickAddSheet

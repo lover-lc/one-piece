@@ -9,6 +9,8 @@ export function useNotifications() {
   return useQuery({
     queryKey: ['notifications', currentMemberId],
     enabled: Boolean(currentMemberId && supabase),
+    refetchInterval: 10_000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       if (!supabase || !currentMemberId) return []
 

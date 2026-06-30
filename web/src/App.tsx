@@ -15,7 +15,9 @@ import TodosPage from './modules/todos/pages/TodosPage'
 import TodoTabLayout from './modules/todos/components/layout/TodoTabLayout'
 import TodoModuleLayout from './modules/todos/components/layout/TodoModuleLayout'
 import { PendingActionsProvider } from './modules/todos/context/pending-actions-context'
+import NotificationToast from './modules/todos/components/NotificationToast'
 import { useSeedDefaultTodoList } from './modules/todos/hooks/use-seed-todo'
+import { useRealtimeTodos } from './shared/hooks/use-realtime'
 import RequireAuth from './shared/components/RequireAuth'
 import RequireMember from './shared/components/RequireMember'
 import ThemeShell from './shared/components/ThemeShell'
@@ -27,9 +29,11 @@ const queryClient = new QueryClient()
 function SeedLayout() {
   useSeedUserDefaults()
   useSeedDefaultTodoList()
+  useRealtimeTodos()
   return (
     <PendingActionsProvider>
       <Outlet />
+      <NotificationToast />
     </PendingActionsProvider>
   )
 }
@@ -61,7 +65,7 @@ function AppRoutes() {
               <Route element={<TodoTabLayout />}>
                 <Route index element={<TodosPage />} />
                 <Route path="timeline" element={<TodosPage />} />
-                <Route path="assigned" element={<TodosPage />} />
+                <Route path="assigned" element={<Navigate to="/todos" replace />} />
                 <Route path="created" element={<TodosPage />} />
                 <Route path="lists" element={<TodoListsRedirect />} />
                 <Route path="manage" element={<TodoManagePage />} />

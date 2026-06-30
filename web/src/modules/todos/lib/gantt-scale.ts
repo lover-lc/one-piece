@@ -5,7 +5,13 @@ import {
   getTodayIso,
   normalizedSpan,
 } from './timeline-utils'
+import { isoToLocalDate, composeAllDayIso } from '../../../shared/lib/datetime-utils'
+import {
+  ganttRangeToBounds,
+  spansIntersectTimestampFilter,
+} from '../../../shared/lib/gantt-range-utils'
 import type { TodoItem } from '../types/todo-types'
+import { getTodoDueDate } from '../../../shared/lib/todo-schedule'
 
 export type GanttGranularity = 'day' | 'week' | 'month'
 
@@ -22,7 +28,7 @@ export type GanttColumn = {
 }
 
 export const GANTT_DAY_COLUMN_WIDTH = 40
-export const GANTT_WEEK_COLUMN_WIDTH = 80
+export const GANTT_WEEK_COLUMN_WIDTH = 96
 export const GANTT_MONTH_COLUMN_WIDTH = 112
 
 /** @deprecated use GANTT_DAY_COLUMN_WIDTH */
@@ -53,10 +59,12 @@ export function isValidGanttRange(range: GanttRange): boolean {
 
 /** Filter prefs may leave start or end open (empty string). */
 export function isValidGanttRangeFilter(start: string, end: string): boolean {
-  const hasStart = isIsoDate(start)
-  const hasEnd = isIsoDate(end)
-  if (!hasStart && !hasEnd) return false
-  if (hasStart && hasEnd && start > end) return false
+  const startDate = start ? (isoToLocalDate(start) ?? (isIsoDate(start) ? start : null)) : null
+  const endDate = end ? (isoToLocalDate(end) ?? (isIsoDate(end) ? end : null)) : null
+  const hasStart = Boolean(startDate && isIsoDate(startDate))
+  const hasEnd = Boolean(endDate && isIsoDate(endDate))
+  if (!hasStart && !hasEnd) return true
+  if (hasStart && hasEnd && startDate! > endDate!) return false
   return true
 }
 
@@ -66,10 +74,25 @@ export type GanttRangeBounds = {
 }
 
 export function parseRangeFilter(range: GanttRange): GanttRangeBounds {
-  return {
-    start: isIsoDate(range.start) ? range.start : undefined,
-    end: isIsoDate(range.end) ? range.end : undefined,
-  }
+  return ganttRangeToBounds(range)
+}
+
+function todoSpanIsoBounds(todo: TodoItem): { start: string; end: string } {
+  const { start, end } = normalizedSpan(todo)
+  const startIso = todo.startAt ?? composeAllDayIso(start)
+  const endIso = todo.dueAt ?? composeAllDayIso(end)
+  return { start: startIso, end: endIso }
+}
+
+export function filterTodosByRangeFilter(
+  todos: TodoItem[],
+  filter: GanttRangeBounds,
+): TodoItem[] {
+  return todos.filter((todo) => {
+    if (!getTodoDueDate(todo)) return false
+    const span = todoSpanIsoBounds(todo)
+    return spansIntersectTimestampFilter(span.start, span.end, filter)
+  })
 }
 
 /** Max day columns to keep rendering responsive */
@@ -100,26 +123,28 @@ export function buildDisplayRange(
 ): GanttRange {
   const fallback = defaultRange(granularity, today)
   const spanDays = defaultSpanDays(granularity, today)
+  const filterStart = filter.start ? (isoToLocalDate(filter.start) ?? filter.start) : undefined
+  const filterEnd = filter.end ? (isoToLocalDate(filter.end) ?? filter.end) : undefined
 
-  if (filter.start && filter.end) {
-    let range = { start: filter.start, end: filter.end }
+  if (filterStart && filterEnd) {
+    let range = { start: filterStart, end: filterEnd }
     if (granularity === 'day') range = clampRangeDays(range, MAX_GANTT_DAY_COLUMNS)
     return range
   }
 
-  if (filter.end && !filter.start) {
+  if (filterEnd && !filterStart) {
     let range = {
-      start: addDays(filter.end, -(spanDays - 1)),
-      end: filter.end,
+      start: addDays(filterEnd, -(spanDays - 1)),
+      end: filterEnd,
     }
     if (granularity === 'day') range = clampRangeDays(range, MAX_GANTT_DAY_COLUMNS)
     return range
   }
 
-  if (filter.start && !filter.end) {
+  if (filterStart && !filterEnd) {
     let range = {
-      start: filter.start,
-      end: addDays(filter.start, spanDays - 1),
+      start: filterStart,
+      end: addDays(filterStart, spanDays - 1),
     }
     if (granularity === 'day') range = clampRangeDays(range, MAX_GANTT_DAY_COLUMNS)
     return range
@@ -136,17 +161,6 @@ export function spansIntersectFilter(
   if (filter.start && spanEnd < filter.start) return false
   if (filter.end && spanStart > filter.end) return false
   return true
-}
-
-export function filterTodosByRangeFilter(
-  todos: TodoItem[],
-  filter: GanttRangeBounds,
-): TodoItem[] {
-  return todos.filter((todo) => {
-    if (!todo.dueDate) return false
-    const { start, end } = normalizedSpan(todo)
-    return spansIntersectFilter(start, end, filter)
-  })
 }
 
 export function isTodayInDisplayRange(
@@ -404,12 +418,16 @@ export function computeTodayColumnOffset(
   columns: GanttColumn[],
   today: string,
   range: GanttRange,
+  granularity: GanttGranularity = 'day',
 ): number | null {
   if (today < range.start || today > range.end) return null
 
   let offset = 0
   for (const col of columns) {
     if (today >= col.start && today <= col.end) {
+      if (granularity === 'month') {
+        return offset + col.widthPx / 2
+      }
       const colDays = columnDayCount(col)
       const dayOffset = daysBetween(col.start, today)
       return offset + (dayOffset / colDays) * col.widthPx + col.widthPx / 2
@@ -435,10 +453,11 @@ export function formatColumnHeader(
 
   if (granularity === 'week') {
     const weekNum = Number(column.key.split('-W')[1])
+    const month = Number(column.start.split('-')[1])
     const isToday = today >= column.start && today <= column.end
     return {
-      label: `第 ${weekNum} 周`,
-      sublabel: `${formatDueLabel(column.start)}–${formatDueLabel(column.end)}`,
+      label: `${month}月`,
+      sublabel: `第${weekNum}周`,
       isToday,
     }
   }
@@ -446,7 +465,8 @@ export function formatColumnHeader(
   const [year, month] = column.key.split('-').map(Number)
   const isToday = today.startsWith(column.key)
   return {
-    label: `${year}年${month}月`,
+    label: `${year}年`,
+    sublabel: `${month}月`,
     isToday,
   }
 }

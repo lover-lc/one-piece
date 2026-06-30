@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom'
 import { useCurrentMember } from '../../../shared/hooks/use-current-member'
 import TimelineView from '../components/TimelineView'
 import TimelineViewModeToggle from '../components/TimelineViewModeToggle'
+import DateRangeField from '../../../shared/components/DateRangeField'
 import TimelineGranularityToggle from '../components/TimelineGranularityToggle'
 import TodoFilterBar from '../components/TodoFilterBar'
 import TodoCard from '../components/TodoCard'
@@ -95,15 +96,9 @@ export default function TodosPage() {
   const isTimeline = location.pathname.endsWith('/timeline')
   const { currentMemberId } = useCurrentMember()
 
-  const filter: 'assigned' | 'created' | 'all' = location.pathname.endsWith('/assigned')
-    ? 'assigned'
-    : location.pathname.endsWith('/created')
-      ? 'created'
-      : 'all'
+  const filter: 'created' | 'all' = location.pathname.endsWith('/created') ? 'created' : 'all'
 
-  const { data: todos = [], isLoading } = useTodos(
-    isTimeline ? 'assigned' : filter === 'all' ? undefined : filter,
-  )
+  const { data: todos = [], isLoading } = useTodos(filter === 'all' ? undefined : filter)
   const [timelineMode, setTimelineMode] = useTimelineMode()
   const { granularity, range, setGranularity, setRange } = useGanttPrefs()
   const { data: lists = [] } = useTodoLists()
@@ -259,17 +254,22 @@ export default function TodosPage() {
 
   if (isTimeline) {
     return (
-      <div className="flex h-full min-h-0 flex-col px-4 py-3">
-        <TodoFilterBar lists={lists} tags={tags} todos={todos} />
-        <TimelineViewModeToggle value={timelineMode} onChange={setTimelineMode} />
-        <TimelineGranularityToggle value={granularity} onChange={setGranularity} />
-        <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden px-4 py-2">
+        <div className="shrink-0 space-y-1">
+          <TodoFilterBar lists={lists} tags={tags} todos={todos} />
+          <TimelineViewModeToggle value={timelineMode} onChange={setTimelineMode} />
+          <DateRangeField range={range} onApply={setRange} />
+          {timelineMode === 'due' ? (
+            <TimelineGranularityToggle value={granularity} onChange={setGranularity} />
+          ) : null}
+        </div>
+        <div className="mt-1 flex min-h-0 flex-1 flex-col overflow-hidden">
           <TimelineView
             todos={filteredTodos}
             mode={timelineMode}
             granularity={granularity}
             range={range}
-            onApplyRange={setRange}
+            onGranularityChange={setGranularity}
           />
         </div>
       </div>
@@ -277,7 +277,7 @@ export default function TodosPage() {
   }
 
   return (
-    <div className="px-4 py-3">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-y-auto px-4 py-3">
       <Input
         value={search}
         onChange={(e) => setSearch(e.target.value)}

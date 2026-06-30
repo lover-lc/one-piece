@@ -8,15 +8,18 @@ import {
   PRIORITY_COLORS,
   type TimelineWindow,
 } from '../../lib/timeline-utils'
+import { isAssignedTodo } from '../../lib/negotiation-ui'
 import type { TodoItem } from '../../types/todo-types'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import TodoRelationBadge from '../TodoRelationBadge'
+import { GANTT_ROW_HEIGHT } from './gantt-layout'
 
-export const GANTT_LABEL_WIDTH = 96
+export { GANTT_LABEL_WIDTH, GANTT_LABEL_WIDTH_FULLSCREEN, GANTT_ROW_HEIGHT } from './gantt-layout'
+export const GANTT_ROW_HEIGHT_ASSIGNED = GANTT_ROW_HEIGHT + 26
 export const GANTT_DAY_WIDTH_COMPACT = 28
 export const GANTT_DAY_WIDTH_STANDARD = 40
 export const GANTT_DAY_WIDTH_LOOSE = 56
-export const GANTT_ROW_HEIGHT = 32
 export const GANTT_BAR_HEIGHT = 14
 
 export function useGanttData(todos: TodoItem[]) {
@@ -88,42 +91,63 @@ export function getBarColor(
   return 'bg-primary/75'
 }
 
+export function getGanttRowHeight(todo: TodoItem): number {
+  return isAssignedTodo(todo) ? GANTT_ROW_HEIGHT_ASSIGNED : GANTT_ROW_HEIGHT
+}
+
 export function GanttTodoTitle({ todo }: { todo: TodoItem }) {
   const isCompleted = todo.status === 'completed'
   const isPendingReview = todo.status === 'pending_review'
 
+  const titleClassName = cn(
+    'min-w-0 truncate text-sm',
+    isCompleted && 'text-muted-foreground line-through',
+    isPendingReview && !isCompleted && 'text-purple-700 dark:text-purple-300',
+    !isCompleted && !isPendingReview && 'text-foreground',
+  )
+
   return (
-    <div className="flex min-w-0 flex-1 items-center">
+    <div className="flex min-w-0 flex-1 items-start gap-1">
       {todo.priority ? (
         <span
-          className="mr-1.5 h-3 w-0.5 shrink-0 rounded-full"
+          className="mt-0.5 mr-0.5 h-3 w-0.5 shrink-0 rounded-full"
           style={{ backgroundColor: PRIORITY_COLORS[todo.priority] }}
           aria-hidden
         />
       ) : null}
-      <p
-        className={cn(
-          'min-w-0 truncate text-sm',
-          isCompleted
-            ? 'text-muted-foreground line-through'
-            : isPendingReview
-              ? 'text-purple-700 dark:text-purple-300'
-              : 'text-foreground',
-        )}
-        title={todo.title}
-      >
-        {todo.title}
-      </p>
-      <TodoRelationBadge todo={todo} compact className="ml-1 shrink-0" />
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              className="block w-full min-w-0 cursor-pointer text-left"
+              aria-label={`查看标题：${todo.title}`}
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              <p className={titleClassName}>{todo.title}</p>
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            side="right"
+            align="start"
+            className="z-[60] w-auto max-w-[min(20rem,calc(100vw-2rem))] px-3 py-2"
+            onOpenAutoFocus={(event) => event.preventDefault()}
+          >
+            <p className="text-sm leading-snug break-words">{todo.title}</p>
+          </PopoverContent>
+        </Popover>
+        <TodoRelationBadge todo={todo} className="w-fit" />
+      </div>
     </div>
   )
 }
 
-export function GanttLabelCell({ todo }: { todo: TodoItem }) {
+export function GanttLabelCell({ todo, labelWidth }: { todo: TodoItem; labelWidth: number }) {
+  const rowHeight = getGanttRowHeight(todo)
   return (
     <div
-      className="sticky left-0 z-10 flex shrink-0 items-center border-r border-border/50 bg-card px-2"
-      style={{ width: GANTT_LABEL_WIDTH }}
+      className="sticky left-0 z-10 flex shrink-0 items-start border-r border-border/50 bg-card px-2 py-1"
+      style={{ width: labelWidth, height: rowHeight }}
     >
       <GanttTodoTitle todo={todo} />
     </div>

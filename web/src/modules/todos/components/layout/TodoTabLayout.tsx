@@ -8,10 +8,8 @@ import {
   ListTodo,
   Plus,
   Settings2,
-  UserCheck,
-  UserRoundCheck,
 } from 'lucide-react'
-import { Link, Outlet } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import NotificationCenter from '../NotificationCenter'
 import MemberSwitcher from '../../../portal/components/MemberSwitcher'
 import AppTabBar, { tabBarBottomOffset } from '../../../../shared/components/AppTabBar'
@@ -24,13 +22,6 @@ const tabs = [
     label: '时间轴',
     icon: Calendar,
     activeIcon: CalendarDays,
-    end: false,
-  },
-  {
-    to: '/todos/assigned',
-    label: '分配给我',
-    icon: UserCheck,
-    activeIcon: UserRoundCheck,
     end: false,
   },
   {
@@ -49,23 +40,33 @@ const tabs = [
   },
 ] as const
 
+const FAB_SIZE = '3.5rem'
+
 export default function TodoTabLayout() {
+  const location = useLocation()
+  const showFab = location.pathname === '/todos'
+
+  const mainPaddingBottom = showFab
+    ? `calc(${tabBarBottomOffset} + ${FAB_SIZE})`
+    : tabBarBottomOffset
+
   return (
-    <div className="flex min-h-svh flex-col">
-        <header className="border-b border-border bg-card/80 px-4 py-2 backdrop-blur-sm">
-          <div className="flex items-center justify-end gap-1">
-            <MemberSwitcher />
-            <NotificationCenter />
-          </div>
-        </header>
+    <div className="flex h-dvh flex-col overflow-hidden">
+      <header className="shrink-0 border-b border-border bg-card/80 px-4 py-2 backdrop-blur-sm">
+        <div className="flex items-center justify-end gap-1">
+          <MemberSwitcher />
+          <NotificationCenter />
+        </div>
+      </header>
 
-        <main
-          className="flex min-h-0 flex-1 flex-col"
-          style={{ paddingBottom: `calc(${tabBarBottomOffset} + 3.5rem)` }}
-        >
-          <Outlet />
-        </main>
+      <main
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
+        style={{ paddingBottom: mainPaddingBottom }}
+      >
+        <Outlet />
+      </main>
 
+      {showFab ? (
         <Button
           size="icon-lg"
           className="fixed right-4 z-30 size-12 rounded-full shadow-lg"
@@ -76,8 +77,9 @@ export default function TodoTabLayout() {
             <Plus className="size-6" />
           </Link>
         </Button>
+      ) : null}
 
-        <AppTabBar tabs={tabs} labelClassName="text-[10px]" />
+      <AppTabBar tabs={tabs} labelClassName="text-[10px]" />
     </div>
   )
 }

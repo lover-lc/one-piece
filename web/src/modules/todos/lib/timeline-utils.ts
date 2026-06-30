@@ -1,7 +1,6 @@
 import type { TodoItem, TodoPriority } from '../types/todo-types'
+import { getTodoDueDate, getTodoStartDate, compareTodoSchedule } from '../../../shared/lib/todo-schedule'
 import {
-  formatMonthGroupLabel,
-  formatWeekLabel,
   getOverviewGroupKey,
   getWeekMonday,
   type GanttGranularity,
@@ -38,9 +37,17 @@ export type OverviewDateGroupSegment = {
   type: 'date-group'
   spine: DateSpineMeta
   todos: TodoItem[]
+  showsTodayLine?: boolean
 }
 
-export type OverviewSegment = OverviewDateGroupSegment | OverviewGapSegment
+export type OverviewTodayMarkerSegment = {
+  type: 'today-marker'
+}
+
+export type OverviewSegment =
+  | OverviewDateGroupSegment
+  | OverviewGapSegment
+  | OverviewTodayMarkerSegment
 
 export const OVERVIEW_SPINE_WIDTH = 56
 
@@ -86,11 +93,11 @@ export function daysBetween(start: string, end: string): number {
 }
 
 export function effectiveStart(todo: TodoItem): string {
-  return todo.startDate ?? todo.dueDate ?? todo.createdAt.slice(0, 10)
+  return getTodoStartDate(todo) ?? getTodoDueDate(todo) ?? todo.createdAt.slice(0, 10)
 }
 
 export function effectiveEnd(todo: TodoItem): string {
-  return todo.dueDate ?? effectiveStart(todo)
+  return getTodoDueDate(todo) ?? effectiveStart(todo)
 }
 
 export function normalizedSpan(todo: TodoItem): { start: string; end: string } {
@@ -170,12 +177,12 @@ export function partitionTodos(todos: TodoItem[]): {
   const dated: TodoItem[] = []
   const noDate: TodoItem[] = []
   for (const todo of todos) {
-    if (todo.dueDate) dated.push(todo)
+    if (getTodoDueDate(todo)) dated.push(todo)
     else noDate.push(todo)
   }
   dated.sort((a, b) => {
-    const dueCmp = a.dueDate!.localeCompare(b.dueDate!)
-    if (dueCmp !== 0) return dueCmp
+    const scheduleCmp = compareTodoSchedule(a, b)
+    if (scheduleCmp !== 0) return scheduleCmp
     return compareTodos(a, b)
   })
   noDate.sort(compareTodos)
@@ -254,11 +261,13 @@ export function formatWeekSpineMeta(weekKey: string, anchorDate: string, today =
   const sunday = addDays(monday, 6)
   const containsToday = today >= monday && today <= sunday
   const isOverdue = sunday < today
+  const month = Number(monday.split('-')[1])
+  const weekNum = Number(weekKey.split('-W')[1])
 
   return {
     dateKey: weekKey,
-    label: formatWeekLabel(weekKey),
-    sublabel: containsToday ? '本周' : `${formatDueLabel(monday)}`,
+    label: `${month}月`,
+    sublabel: containsToday ? '本周' : `第${weekNum}周`,
     accentClass: isOverdue
       ? 'text-status-expired'
       : containsToday
@@ -279,8 +288,8 @@ export function formatMonthSpineMeta(monthKey: string, today = getTodayIso()): D
 
   return {
     dateKey: monthKey,
-    label: formatMonthGroupLabel(monthKey),
-    sublabel: containsToday ? '本月' : undefined,
+    label: `${year}年`,
+    sublabel: containsToday ? '本月' : `${month}月`,
     accentClass: isOverdue
       ? 'text-status-expired'
       : containsToday
@@ -345,7 +354,8 @@ export function buildOverviewSegments(
   let current: { dateKey: string; todos: TodoItem[] } | null = null
 
   for (const todo of dated) {
-    const dateKey = getOverviewGroupKey(todo.dueDate!, granularity)
+    const dueDate = getTodoDueDate(todo)!
+    const dateKey = getOverviewGroupKey(dueDate, granularity)
     if (current && current.dateKey === dateKey) {
       current.todos.push(todo)
     } else {
@@ -362,7 +372,7 @@ export function buildOverviewSegments(
       granularity === 'day'
         ? formatSpineMeta(group.dateKey, today)
         : granularity === 'week'
-          ? formatWeekSpineMeta(group.dateKey, group.todos[0]!.dueDate!, today)
+          ? formatWeekSpineMeta(group.dateKey, getTodoDueDate(group.todos[0]!)!, today)
           : formatMonthSpineMeta(group.dateKey, today)
 
     segments.push({
@@ -383,7 +393,117 @@ export function buildOverviewSegments(
     }
   }
 
-  return { segments, noDate }
+  return {
+    segments: applyOverviewTodayIndicator(segments, granularity, today),
+    noDate,
+  }
+}
+
+function getDateGroupRange(
+  group: OverviewDateGroupSegment,
+  granularity: GanttGranularity,
+): { start: string; end: string } {
+  if (granularity === 'day') {
+    return { start: group.spine.dateKey, end: group.spine.dateKey }
+  }
+
+  const dueDates = group.todos.map((todo) => getTodoDueDate(todo)!).filter(Boolean)
+  const start = dueDates.reduce((min, date) => (date < min ? date : min))
+  const end = dueDates.reduce((max, date) => (date > max ? date : max))
+
+  if (granularity === 'week') {
+    const monday = getWeekMonday(start)
+    return { start: monday, end: addDays(getWeekMonday(end), 6) }
+  }
+
+  const monthKey = group.spine.dateKey
+  const [year, month] = monthKey.split('-').map(Number)
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
+  return {
+    start: `${monthKey}-01`,
+    end: `${monthKey}-${String(lastDay).padStart(2, '0')}`,
+  }
+}
+
+export function overviewDateGroupContainsToday(
+  group: OverviewDateGroupSegment,
+  granularity: GanttGranularity,
+  today = getTodayIso(),
+): boolean {
+  const { start, end } = getDateGroupRange(group, granularity)
+  return today >= start && today <= end
+}
+
+export function applyOverviewTodayIndicator(
+  segments: OverviewSegment[],
+  granularity: GanttGranularity,
+  today = getTodayIso(),
+): OverviewSegment[] {
+  if (segments.length === 0) return segments
+
+  const todayGroupIndex = segments.findIndex(
+    (segment) =>
+      segment.type === 'date-group' &&
+      overviewDateGroupContainsToday(segment, granularity, today),
+  )
+
+  if (todayGroupIndex >= 0) {
+    return segments.map((segment, index) =>
+      segment.type === 'date-group' && index === todayGroupIndex
+        ? { ...segment, showsTodayLine: true }
+        : segment,
+    )
+  }
+
+  return insertOverviewTodayMarker(segments, granularity, today)
+}
+
+export function insertOverviewTodayMarker(
+  segments: OverviewSegment[],
+  granularity: GanttGranularity,
+  today = getTodayIso(),
+): OverviewSegment[] {
+  if (segments.length === 0) return segments
+
+  const result: OverviewSegment[] = []
+  let inserted = false
+
+  for (const segment of segments) {
+    if (!inserted) {
+      if (segment.type === 'date-group') {
+        const { start } = getDateGroupRange(segment, granularity)
+        if (today < start) {
+          result.push({ type: 'today-marker' })
+          inserted = true
+        }
+      } else if (segment.type === 'gap') {
+        if (today >= segment.fromDate && today <= segment.toDate) {
+          result.push({ type: 'today-marker' })
+          inserted = true
+        } else if (today < segment.fromDate) {
+          result.push({ type: 'today-marker' })
+          inserted = true
+        }
+      }
+    }
+
+    result.push(segment)
+  }
+
+  if (!inserted) {
+    const last = segments[segments.length - 1]!
+    const lastEnd =
+      last.type === 'date-group'
+        ? getDateGroupRange(last, granularity).end
+        : last.type === 'gap'
+          ? last.toDate
+          : today
+    if (today > lastEnd) {
+      result.push({ type: 'today-marker' })
+    }
+  }
+
+  return result
 }
 
 export function buildDueViewRows(todos: TodoItem[], today = getTodayIso()): DueTimelineRow[] {

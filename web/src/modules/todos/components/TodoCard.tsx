@@ -8,6 +8,7 @@ import TodoStatusReasonBanner from './TodoStatusReasonBanner'
 import { Checkbox } from '@/components/ui/checkbox'
 import { getTodoDisplayTitle } from '../lib/todo-display'
 import { cn } from '@/lib/utils'
+import TodoAssignStatusLabel from './TodoAssignStatusLabel'
 import TodoRelationBadge from './TodoRelationBadge'
 
 type TodoCardProps = {
@@ -96,11 +97,7 @@ export default function TodoCard({
                 {todo.description}
               </p>
             ) : null}
-            {isPendingReview ? (
-              <p className="mt-0.5 text-xs text-purple-600 dark:text-purple-400">
-                待验收
-              </p>
-            ) : null}
+            <TodoAssignStatusLabel todo={todo} className="mt-0.5" />
             {statusReason && reasonStatus ? (
               <TodoStatusReasonBanner
                 status={reasonStatus}

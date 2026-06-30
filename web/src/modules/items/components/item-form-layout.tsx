@@ -5,6 +5,8 @@ import {
   XCircle,
 } from 'lucide-react'
 import type { ReactNode } from 'react'
+import DateField, { dateFieldFromIso, isoFromDateField } from '../../../shared/components/DateField'
+import { composeAllDayIso } from '../../../shared/lib/datetime-utils'
 import { parseISODate } from '../../../shared/lib/date-utils'
 import type { ItemStatus } from '../lib/item-status'
 
@@ -210,14 +212,21 @@ export function DateInputRow({
   value: string
   onChange: (value: string) => void
 }) {
+  const fieldValue = dateFieldFromIso(
+    value ? composeAllDayIso(value) : null,
+    true,
+  )
+
   return (
-    <div className="flex items-center justify-between gap-3 px-4 py-2.5">
-      <label className="shrink-0 text-sm text-text-secondary">{label}</label>
-      <input
-        type="date"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className={dateInputClass}
+    <div className="px-4 py-2.5">
+      <DateField
+        label={label}
+        value={fieldValue}
+        onChange={(next) => {
+          const iso = isoFromDateField(next, true)
+          onChange(iso ? iso.slice(0, 10) : '')
+        }}
+        allowClear={false}
       />
     </div>
   )

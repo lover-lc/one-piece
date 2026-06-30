@@ -1,59 +1,15 @@
-import { ChevronRight, Plus } from 'lucide-react'
-import { useState } from 'react'
-import BottomSheet from '../../../shared/components/ui/BottomSheet'
-import SwipeRow from '../../../shared/components/ui/SwipeRow'
+import { Plus } from 'lucide-react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   createCustomReminderPreset,
+  getOrderedReminderPresets,
+  mergeReminderPresets,
   REMINDER_OFFSET_OPTIONS,
   type ReminderPreset,
   type ReminderPresetKind,
 } from '../lib/reminder-presets'
 import { useTodoUiStore } from '../store/todo-ui-store'
-
-function OffsetPicker({
-  value,
-  onChange,
-}: {
-  value: number
-  onChange: (minutes: number) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const selected =
-    REMINDER_OFFSET_OPTIONS.find((o) => o.minutes === value)?.label ?? '自定义'
-
-  return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="flex w-full min-w-0 items-center justify-between rounded-button border border-bg-hover bg-bg px-3 py-2 text-left text-sm"
-      >
-        <span className="truncate text-text">截止前 {selected}</span>
-        <ChevronRight className="size-4 shrink-0 text-text-tertiary" />
-      </button>
-      <BottomSheet open={open} onClose={() => setOpen(false)} title="选择提前量">
-        <ul className="max-h-[50svh] overflow-y-auto">
-          {REMINDER_OFFSET_OPTIONS.map((opt) => (
-            <li key={opt.minutes}>
-              <button
-                type="button"
-                onClick={() => {
-                  onChange(opt.minutes)
-                  setOpen(false)
-                }}
-                className={`flex w-full px-4 py-3 text-left text-sm hover:bg-bg-hover ${
-                  value === opt.minutes ? 'font-medium text-primary' : 'text-text'
-                }`}
-              >
-                截止前 {opt.label}
-              </button>
-            </li>
-          ))}
-        </ul>
-      </BottomSheet>
-    </>
-  )
-}
+import PresetManageList from './PresetManageList'
 
 function PresetFormDialog({
   title,
@@ -146,7 +102,17 @@ function PresetFormDialog({
           {kind === 'offset' ? (
             <div>
               <label className="mb-1 block text-xs text-text-secondary">提前量</label>
-              <OffsetPicker value={offsetMinutes} onChange={setOffsetMinutes} />
+              <select
+                value={offsetMinutes}
+                onChange={(e) => setOffsetMinutes(Number(e.target.value))}
+                className="w-full rounded-button border border-bg-hover bg-bg px-3 py-2.5 text-sm text-text outline-none focus:border-primary/30"
+              >
+                {REMINDER_OFFSET_OPTIONS.map((opt) => (
+                  <option key={opt.minutes} value={opt.minutes}>
+                    截止前 {opt.label}
+                  </option>
+                ))}
+              </select>
             </div>
           ) : (
             <div>
@@ -182,11 +148,30 @@ function PresetFormDialog({
 }
 
 export default function ReminderManagePanel() {
-  const reminderPresets = useTodoUiStore((s) => s.reminderPresets)
-  const addReminderPreset = useTodoUiStore((s) => s.addReminderPreset)
-  const updateReminderPreset = useTodoUiStore((s) => s.updateReminderPreset)
-  const removeReminderPreset = useTodoUiStore((s) => s.removeReminderPreset)
+  const customPresets = useTodoUiStore((s) => s.reminderPresets)
+  const order = useTodoUiStore((s) => s.reminderPresetOrder)
+  const disabled = useTodoUiStore((s) => s.reminderPresetDisabled)
+  const addPreset = useTodoUiStore((s) => s.addReminderPreset)
+  const updatePreset = useTodoUiStore((s) => s.updateReminderPreset)
+  const removePreset = useTodoUiStore((s) => s.removeReminderPreset)
+  const movePreset = useTodoUiStore((s) => s.moveReminderPreset)
+  const toggleDisabled = useTodoUiStore((s) => s.toggleReminderPresetDisabled)
+  const setOrder = useTodoUiStore((s) => s.setReminderPresetOrder)
+
   const [dialog, setDialog] = useState<'add' | { edit: ReminderPreset } | null>(null)
+
+  const ordered = useMemo(
+    () => getOrderedReminderPresets(customPresets, order, disabled),
+    [customPresets, order, disabled],
+  )
+
+  useEffect(() => {
+    if (order.length === 0 && ordered.length > 0) {
+      setOrder(ordered.map((p) => p.id))
+    }
+  }, [order.length, ordered, setOrder])
+
+  const disabledSet = useMemo(() => new Set(disabled), [disabled])
 
   function presetDetail(preset: ReminderPreset): string {
     if (preset.kind === 'fixed' && preset.fixedTime) {
@@ -196,10 +181,22 @@ export default function ReminderManagePanel() {
     return opt ? `截止前 ${opt.label}` : '时间间隔'
   }
 
+  const items = ordered.map((preset) => ({
+    id: preset.id,
+    title: preset.name,
+    subtitle: presetDetail(preset),
+    builtin: preset.builtin,
+    disabled: disabledSet.has(preset.id),
+  }))
+
+  function findPreset(id: string) {
+    return mergeReminderPresets(customPresets).find((p) => p.id === id)
+  }
+
   return (
     <section>
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-medium text-text-secondary">自定义提醒预设</h2>
+        <h2 className="text-sm font-medium text-text-secondary">提醒预设</h2>
         <button
           type="button"
           onClick={() => setDialog('add')}
@@ -210,35 +207,32 @@ export default function ReminderManagePanel() {
         </button>
       </div>
       <p className="mt-1 text-xs text-text-tertiary">
-        内置预设不可编辑。此处配置的成员专属预设会出现在新建待办的提醒选项中。
+        可排序、停用预设。停用后不会出现在新建待办的提醒选项中。
       </p>
 
-      {reminderPresets.length === 0 ? (
-        <p className="py-6 text-center text-sm text-text-secondary">暂无自定义预设</p>
-      ) : (
-        <ul className="mt-3 space-y-2">
-          {reminderPresets.map((preset) => (
-            <li key={preset.id}>
-              <SwipeRow
-                onDelete={() => removeReminderPreset(preset.id)}
-                onContentClick={() => setDialog({ edit: preset })}
-              >
-                <div className="bg-card px-4 py-3">
-                  <p className="text-sm font-medium text-text">{preset.name}</p>
-                  <p className="mt-0.5 text-xs text-text-secondary">{presetDetail(preset)}</p>
-                </div>
-              </SwipeRow>
-            </li>
-          ))}
-        </ul>
-      )}
+      <div className="mt-3">
+        {items.length === 0 ? (
+          <p className="py-6 text-center text-sm text-text-secondary">暂无预设</p>
+        ) : (
+          <PresetManageList
+            items={items}
+            onMove={movePreset}
+            onToggleDisabled={toggleDisabled}
+            onEdit={(id) => {
+              const preset = findPreset(id)
+              if (preset && !preset.builtin) setDialog({ edit: preset })
+            }}
+            onDelete={(id) => removePreset(id)}
+          />
+        )}
+      </div>
 
       {dialog === 'add' ? (
         <PresetFormDialog
           title="新建提醒预设"
           onCancel={() => setDialog(null)}
           onConfirm={(preset) => {
-            addReminderPreset(preset)
+            addPreset(preset)
             setDialog(null)
           }}
         />
@@ -250,7 +244,7 @@ export default function ReminderManagePanel() {
           initial={dialog.edit}
           onCancel={() => setDialog(null)}
           onConfirm={(preset) => {
-            updateReminderPreset(preset.id, {
+            updatePreset(preset.id, {
               name: preset.name,
               kind: preset.kind,
               offsetMinutes: preset.offsetMinutes,

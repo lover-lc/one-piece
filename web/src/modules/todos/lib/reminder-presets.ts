@@ -1,3 +1,5 @@
+import { filterDisabledPresets, orderByPresetIds } from './preset-order'
+
 export type ReminderPresetKind = 'offset' | 'fixed'
 
 export type ReminderPreset = {
@@ -42,8 +44,38 @@ export const REMINDER_OFFSET_OPTIONS = [
   { label: '1 周', minutes: 7 * 24 * 60 },
 ] as const
 
+export const DEFAULT_REMINDER_PRESET_ORDER = BUILTIN_REMINDER_PRESETS.map((p) => p.id)
+
+export const REMINDER_NONE_ID = '__none__'
+
 export function mergeReminderPresets(custom: ReminderPreset[]): ReminderPreset[] {
   return [...BUILTIN_REMINDER_PRESETS, ...custom.filter((p) => !p.builtin)]
+}
+
+export function getOrderedReminderPresets(
+  custom: ReminderPreset[],
+  order: string[],
+  disabled: string[],
+  { enabledOnly = false }: { enabledOnly?: boolean } = {},
+): ReminderPreset[] {
+  const merged = mergeReminderPresets(custom)
+  const ordered = orderByPresetIds(merged, order, DEFAULT_REMINDER_PRESET_ORDER)
+  if (!enabledOnly) return ordered
+  return filterDisabledPresets(ordered, disabled)
+}
+
+export function getEnabledReminderOptions(
+  custom: ReminderPreset[],
+  order: string[],
+  disabled: string[],
+): { id: string; name: string }[] {
+  return [
+    { id: REMINDER_NONE_ID, name: '不提醒' },
+    ...getOrderedReminderPresets(custom, order, disabled, { enabledOnly: true }).map((p) => ({
+      id: p.id,
+      name: p.name,
+    })),
+  ]
 }
 
 export function findReminderPreset(

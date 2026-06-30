@@ -1,62 +1,28 @@
 import { describe, expect, it } from 'vitest'
 import {
-  resolveReminderAt,
-  type ReminderPreset,
+  getEnabledReminderOptions,
+  getOrderedReminderPresets,
+  REMINDER_NONE_ID,
 } from '../src/modules/todos/lib/reminder-presets'
 
-const customPresets: ReminderPreset[] = [
-  {
-    id: 'custom:test',
-    name: '测试',
-    kind: 'offset',
-    offsetMinutes: 30,
-  },
-]
-
-describe('resolveReminderAt', () => {
-  it('returns null when no reminder selected', () => {
-    expect(resolveReminderAt({ type: 'none' }, '2026-07-01', customPresets)).toBeNull()
+describe('reminder-presets ordering', () => {
+  it('prepends none and respects disabled filter', () => {
+    const options = getEnabledReminderOptions([], ['builtin:1h', 'builtin:15m'], ['builtin:15m'])
+    expect(options[0]).toEqual({ id: REMINDER_NONE_ID, name: '不提醒' })
+    expect(options.some((o) => o.id === 'builtin:15m')).toBe(false)
+    expect(options.some((o) => o.id === 'builtin:1h')).toBe(true)
   })
 
-  it('resolves builtin offset preset from due date', () => {
-    const at = resolveReminderAt(
-      { type: 'preset', presetId: 'builtin:1h' },
-      '2026-07-01',
-      customPresets,
-    )
-    expect(at).toBe(new Date('2026-07-01T22:59:59').toISOString())
-  })
-
-  it('resolves fixed preset on due date', () => {
-    const at = resolveReminderAt(
-      { type: 'preset', presetId: 'builtin:due_9am' },
-      '2026-07-01',
-      customPresets,
-    )
-    expect(at).toBe(new Date('2026-07-01T09:00:00').toISOString())
-  })
-
-  it('resolves custom member preset', () => {
-    const at = resolveReminderAt(
-      { type: 'preset', presetId: 'custom:test' },
-      '2026-07-01',
-      customPresets,
-    )
-    expect(at).toBe(new Date('2026-07-01T23:29:59').toISOString())
-  })
-
-  it('uses explicit datetime selection', () => {
-    const at = resolveReminderAt(
-      { type: 'datetime', at: '2026-07-01T14:30' },
-      null,
-      customPresets,
-    )
-    expect(at).toBe(new Date('2026-07-01T14:30').toISOString())
-  })
-
-  it('requires due date for offset presets', () => {
-    expect(
-      resolveReminderAt({ type: 'preset', presetId: 'builtin:1d' }, null, customPresets),
-    ).toBeNull()
+  it('orders custom presets after explicit order', () => {
+    const custom = [
+      {
+        id: 'custom:x',
+        name: '自定义',
+        kind: 'offset' as const,
+        offsetMinutes: 30,
+      },
+    ]
+    const ordered = getOrderedReminderPresets(custom, ['custom:x', 'builtin:1d'], [])
+    expect(ordered.map((p) => p.id).slice(0, 2)).toEqual(['custom:x', 'builtin:1d'])
   })
 })

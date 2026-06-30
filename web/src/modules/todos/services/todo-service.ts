@@ -1,4 +1,5 @@
 import { supabase } from '../../../shared/lib/supabase'
+import { isoToLocalDate } from '../../../shared/lib/datetime-utils'
 import type {
   RecurrenceRule,
   TodoItem,
@@ -29,6 +30,9 @@ type DbItem = {
   creator_id: string
   assignee_id: string
   priority: TodoPriority | null
+  is_all_day?: boolean
+  start_at: string | null
+  due_at: string | null
   start_date: string | null
   due_date: string | null
   require_feedback: boolean
@@ -64,6 +68,10 @@ export function toTodoList(row: DbList): TodoList {
 }
 
 export function toTodoItem(row: DbItem, tags: TodoTag[] = []): TodoItem {
+  const startAt = row.start_at ?? null
+  const dueAt = row.due_at ?? null
+  const isAllDay = row.is_all_day ?? true
+
   return {
     id: row.id,
     title: row.title,
@@ -72,8 +80,11 @@ export function toTodoItem(row: DbItem, tags: TodoTag[] = []): TodoItem {
     creatorId: row.creator_id,
     assigneeId: row.assignee_id,
     priority: row.priority,
-    startDate: row.start_date,
-    dueDate: row.due_date,
+    isAllDay,
+    startAt,
+    dueAt,
+    startDate: startAt ? isoToLocalDate(startAt) : row.start_date,
+    dueDate: dueAt ? isoToLocalDate(dueAt) : row.due_date,
     requireFeedback: row.require_feedback,
     status: row.status,
     awaitingMemberId: row.awaiting_member_id ?? null,
@@ -404,6 +415,26 @@ export async function sendProposalNotification(
     todo_item_id: todoItemId,
     message: `${editorName} 修改了待办，请确认：${title}`,
   })
+}
+
+export async function sendExecutionStartedNotifications(
+  todoItemId: string,
+  creatorId: string,
+  assigneeId: string,
+  title: string,
+) {
+  if (!supabase) return
+
+  const message = `双方已确认，开始执行：${title}`
+  const rows =
+    creatorId === assigneeId
+      ? [{ recipient_id: creatorId, type: 'agreed' as const, todo_item_id: todoItemId, message }]
+      : [
+          { recipient_id: creatorId, type: 'agreed' as const, todo_item_id: todoItemId, message },
+          { recipient_id: assigneeId, type: 'agreed' as const, todo_item_id: todoItemId, message },
+        ]
+
+  await supabase.from('todo_notifications').insert(rows)
 }
 
 export async function createReminderAt(

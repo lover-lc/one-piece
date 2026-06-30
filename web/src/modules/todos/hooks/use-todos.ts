@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { useAuth } from '../../../shared/hooks/use-auth'
 import { useCurrentMember } from '../../../shared/hooks/use-current-member'
 import { supabase } from '../../../shared/lib/supabase'
+import { isoToLocalDate } from '../../../shared/lib/datetime-utils'
 import {
   createReminder,
   createReminderAt,
@@ -12,6 +13,7 @@ import {
   getInitialStatus,
   logStatusChange,
   markTodoNotificationsRead,
+  sendExecutionStartedNotifications,
   sendProposalNotification,
   syncListSelection,
   syncSharedListPlacement,
@@ -26,6 +28,7 @@ import {
   getNegotiationOtherParty,
 } from '../lib/negotiation'
 import { snapshotFromFormInput } from '../lib/negotiation-snapshot'
+import { scheduleFieldsFromInput } from '../lib/schedule-db'
 import type {
   RecurrenceRule,
   TodoFormInput,
@@ -67,8 +70,7 @@ function snapshotToContentPatch(snapshot: ReturnType<typeof snapshotFromFormInpu
     title: snapshot.title,
     description: snapshot.description,
     priority: snapshot.priority,
-    start_date: snapshot.startDate,
-    due_date: snapshot.dueDate,
+    ...scheduleFieldsFromInput(snapshot),
     recurrence_rule: snapshot.recurrenceRule,
   }
 }
@@ -338,8 +340,7 @@ export function useCreateTodo() {
         list_id: listId,
         creator_id: currentMemberId,
         assignee_id: input.assigneeId,
-        start_date: input.startDate || null,
-        due_date: input.dueDate || null,
+        ...scheduleFieldsFromInput(input),
         require_feedback: input.requireFeedback,
         status,
         recurrence_rule: input.recurrenceRule ?? null,
@@ -378,11 +379,14 @@ export function useCreateTodo() {
       if (input.customRemindAt) {
         await createReminderAt(item.id, input.assigneeId, input.customRemindAt)
       } else if (
-        input.dueDate &&
+        input.dueAt &&
         input.reminderOffset &&
         input.reminderOffset !== 'custom'
       ) {
-        await createReminder(item.id, input.assigneeId, input.dueDate, input.reminderOffset)
+        const dueDate = isoToLocalDate(input.dueAt)
+        if (dueDate) {
+          await createReminder(item.id, input.assigneeId, dueDate, input.reminderOffset)
+        }
       }
 
       await logStatusChange(item.id, null, status, currentMemberId)
@@ -440,12 +444,23 @@ export function useUpdateTodo() {
       if (nextListId !== undefined && isCreator) {
         patch.list_id = nextListId || (existingItem as { list_id: string }).list_id
       }
-      if (input.patch.assigneeId !== undefined) patch.assignee_id = input.patch.assigneeId
+      if (input.patch.assigneeId !== undefined) {
+        patch.assignee_id = input.patch.assigneeId
+        const creatorId = (existingItem as { creator_id: string }).creator_id
+        patch.require_feedback = input.patch.assigneeId !== creatorId
+      }
       if (input.patch.priority) {
         patch.priority = input.patch.priority
       }
-      if (input.patch.startDate !== undefined) patch.start_date = input.patch.startDate || null
-      if (input.patch.dueDate !== undefined) patch.due_date = input.patch.dueDate || null
+      if (
+        input.patch.isAllDay !== undefined ||
+        input.patch.startAt !== undefined ||
+        input.patch.dueAt !== undefined ||
+        input.patch.startDate !== undefined ||
+        input.patch.dueDate !== undefined
+      ) {
+        Object.assign(patch, scheduleFieldsFromInput(input.patch))
+      }
       if (input.patch.requireFeedback !== undefined) {
         patch.require_feedback = input.patch.requireFeedback
       }
@@ -542,6 +557,10 @@ export function useNegotiationAction() {
         title: input.patch.title ?? existing.title,
         description: input.patch.description ?? existing.description ?? undefined,
         priority: input.patch.priority ?? existing.priority,
+        isAllDay: input.patch.isAllDay ?? existing.is_all_day ?? true,
+        startAt:
+          input.patch.startAt !== undefined ? input.patch.startAt : existing.start_at,
+        dueAt: input.patch.dueAt !== undefined ? input.patch.dueAt : existing.due_at,
         startDate: input.patch.startDate ?? existing.start_date ?? undefined,
         dueDate: input.patch.dueDate ?? existing.due_date ?? undefined,
         tagIds: input.patch.tagIds,
@@ -554,10 +573,25 @@ export function useNegotiationAction() {
         contentPatch.description = input.patch.description?.trim() || null
       }
       if (input.patch.priority) contentPatch.priority = input.patch.priority
-      if (input.patch.startDate !== undefined) {
-        contentPatch.start_date = input.patch.startDate || null
+      if (
+        input.patch.isAllDay !== undefined ||
+        input.patch.startAt !== undefined ||
+        input.patch.dueAt !== undefined ||
+        input.patch.startDate !== undefined ||
+        input.patch.dueDate !== undefined
+      ) {
+        Object.assign(
+          contentPatch,
+          scheduleFieldsFromInput({
+            isAllDay: input.patch.isAllDay ?? existing.is_all_day ?? true,
+            startAt:
+              input.patch.startAt !== undefined ? input.patch.startAt : existing.start_at,
+            dueAt: input.patch.dueAt !== undefined ? input.patch.dueAt : existing.due_at,
+            startDate: input.patch.startDate,
+            dueDate: input.patch.dueDate,
+          }),
+        )
       }
-      if (input.patch.dueDate !== undefined) contentPatch.due_date = input.patch.dueDate || null
       if (input.patch.recurrenceRule !== undefined) {
         contentPatch.recurrence_rule = input.patch.recurrenceRule
       }
@@ -673,11 +707,17 @@ export function useNegotiationAction() {
         )
       }
 
+      await markTodoNotificationsRead(input.id, currentMemberId)
+
       if (input.action === 'agree' && agreed) {
         await logStatusChange(input.id, input.todo.status, 'in_progress', currentMemberId)
+        await sendExecutionStartedNotifications(
+          input.id,
+          input.todo.creatorId,
+          input.todo.assigneeId,
+          snapshot.title,
+        )
       }
-
-      await markTodoNotificationsRead(input.id, currentMemberId)
 
       return toTodoItem(data as DbItem)
     },

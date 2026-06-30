@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 type TimelineGranularityToggleProps = {
   value: GanttGranularity
   onChange: (value: GanttGranularity) => void
+  className?: string
 }
 
 const options: { value: GanttGranularity; label: string }[] = [
@@ -16,10 +17,14 @@ const options: { value: GanttGranularity; label: string }[] = [
 export default function TimelineGranularityToggle({
   value,
   onChange,
+  className,
 }: TimelineGranularityToggleProps) {
   return (
     <div
-      className="mb-3 inline-flex h-8 rounded-lg border border-border bg-muted/40 p-0.5"
+      className={cn(
+        'mb-3 inline-flex h-8 rounded-lg border border-border bg-muted/40 p-0.5',
+        className,
+      )}
       role="group"
       aria-label="时间粒度"
     >

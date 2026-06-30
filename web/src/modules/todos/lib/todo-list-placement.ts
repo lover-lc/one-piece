@@ -25,7 +25,7 @@ export function listFormToPlacements(
 }
 
 export function listOptionLabel(list: TodoList): string {
-  return list.visibility === 'shared' ? `${list.name} · 共享` : list.name
+  return list.name
 }
 
 export type ListGroup = {

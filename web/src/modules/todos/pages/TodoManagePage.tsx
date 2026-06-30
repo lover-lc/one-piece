@@ -3,6 +3,7 @@ import { Navigate, useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { useCurrentMember } from '../../../shared/hooks/use-current-member'
 import TodoListManage from '../components/TodoListManage'
+import RecurrenceManagePanel from '../components/RecurrenceManagePanel'
 import MemberManagePanel from '../components/MemberManagePanel'
 import ReminderManagePanel from '../components/ReminderManagePanel'
 import {
@@ -62,6 +63,7 @@ function DeleteListDialog({
 const segments = [
   { id: 'lists', label: '清单' },
   { id: 'members', label: '成员' },
+  { id: 'recurrence', label: '重复' },
   { id: 'reminders', label: '提醒' },
 ] as const
 
@@ -71,7 +73,12 @@ export default function TodoManagePage() {
   const [searchParams] = useSearchParams()
   const initialTab = searchParams.get('tab')
   const [segment, setSegment] = useState<SegmentId>(() => {
-    if (initialTab === 'reminders' || initialTab === 'members' || initialTab === 'lists') {
+    if (
+      initialTab === 'reminders' ||
+      initialTab === 'recurrence' ||
+      initialTab === 'members' ||
+      initialTab === 'lists'
+    ) {
       return initialTab
     }
     return 'lists'
@@ -132,14 +139,14 @@ export default function TodoManagePage() {
           lists={lists}
           todoCounts={todoCounts}
           isLoading={isLoading}
-          onAdd={async (name) => {
-            await createList.mutateAsync({ name, visibility: 'private' })
+          onAdd={async (name, color) => {
+            await createList.mutateAsync({ name, visibility: 'private', color })
           }}
-          onAddShared={async (name) => {
-            await createList.mutateAsync({ name, visibility: 'shared' })
+          onAddShared={async (name, color) => {
+            await createList.mutateAsync({ name, visibility: 'shared', color })
           }}
-          onRename={async (id, name) => {
-            await updateList.mutateAsync({ id, name })
+          onRename={async (id, name, color) => {
+            await updateList.mutateAsync({ id, name, color })
           }}
           onDeleteRequest={(list) => {
             const count = todoCounts[list.id] ?? 0
@@ -152,6 +159,8 @@ export default function TodoManagePage() {
         />
       ) : segment === 'members' ? (
         <MemberManagePanel />
+      ) : segment === 'recurrence' ? (
+        <RecurrenceManagePanel />
       ) : (
         <ReminderManagePanel />
       )}

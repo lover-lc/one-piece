@@ -158,10 +158,27 @@ describe('timeline-utils', () => {
       makeTodo({ id: '2', dueDate: '2026-06-28', title: 'B' }),
       makeTodo({ id: '3', dueDate: '2026-07-05', title: 'C' }),
     ]
-    const { segments } = buildOverviewSegments(todos, '2026-06-28')
+    const { segments } = buildOverviewSegments(todos, 'day', '2026-06-28')
     expect(segments.filter((s) => s.type === 'date-group')).toHaveLength(2)
     expect(segments.some((s) => s.type === 'gap')).toBe(true)
     const firstGroup = segments.find((s) => s.type === 'date-group')
     expect(firstGroup && firstGroup.type === 'date-group' && firstGroup.todos).toHaveLength(2)
+  })
+
+  it('marks at most one today line per granularity', () => {
+    const todos = [makeTodo({ id: '1', dueDate: '2026-06-30', title: '今天练车' })]
+    const today = '2026-06-30'
+
+    for (const granularity of ['day', 'week', 'month'] as const) {
+      const { segments } = buildOverviewSegments(todos, granularity, today)
+      const groups = segments.filter((s) => s.type === 'date-group')
+      expect(groups).toHaveLength(1)
+      expect(groups[0]?.type === 'date-group' && groups[0].todos).toHaveLength(1)
+
+      const todayIndicators =
+        segments.filter((s) => s.type === 'today-marker').length +
+        segments.filter((s) => s.type === 'date-group' && s.showsTodayLine).length
+      expect(todayIndicators).toBe(1)
+    }
   })
 })

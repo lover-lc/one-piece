@@ -1,46 +1,34 @@
 import MemberAvatar from '../../../shared/components/MemberAvatar'
-import { useCurrentMember } from '../../../shared/hooks/use-current-member'
 import { useFamilyMembers } from '../../../shared/hooks/use-family-members'
-import {
-  getTodoRelation,
-  getTodoRelationTargetId,
-} from '../lib/todo-relation'
+import { isAssignedTodo } from '../lib/negotiation-ui'
 import type { TodoItem } from '../types/todo-types'
 import { cn } from '@/lib/utils'
 
 type TodoRelationBadgeProps = {
-  todo: Pick<TodoItem, 'creatorId' | 'assigneeId'>
+  todo: Pick<TodoItem, 'creatorId' | 'assigneeId' | 'requireFeedback'>
   className?: string
-  compact?: boolean
 }
 
-export default function TodoRelationBadge({
-  todo,
-  className,
-  compact = false,
-}: TodoRelationBadgeProps) {
-  const { currentMemberId } = useCurrentMember()
+export default function TodoRelationBadge({ todo, className }: TodoRelationBadgeProps) {
   const { data: members = [] } = useFamilyMembers()
-  const relation = getTodoRelation(todo, currentMemberId)
 
-  if (!relation || relation === 'self') return null
+  if (!isAssignedTodo(todo)) return null
 
-  const targetId = getTodoRelationTargetId(relation, todo)
-  const member = members.find((m) => m.id === targetId)
-  if (!member) return null
+  const assignee = members.find((m) => m.id === todo.assigneeId)
+  if (!assignee) return null
 
   return (
     <span
       className={cn(
-        'inline-flex max-w-full items-center gap-1 rounded-full bg-muted/80 px-1.5 py-0.5 text-[10px] text-muted-foreground',
+        'inline-flex items-center gap-0.5 rounded-full bg-muted/80 px-1 py-0.5 text-muted-foreground',
         className,
       )}
+      title={`指派给 ${assignee.name}`}
     >
-      <MemberAvatar member={member} size="sm" className="!size-3.5 !text-[8px]" />
-      <span className="truncate">
-        {relation === 'outbound' ? '→' : '←'}
-        {!compact ? ` ${member.name}` : ''}
+      <span className="text-[10px] leading-none" aria-hidden>
+        →
       </span>
+      <MemberAvatar member={assignee} size="sm" className="!size-3.5 !text-[8px]" />
     </span>
   )
 }

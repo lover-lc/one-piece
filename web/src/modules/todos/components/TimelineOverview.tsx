@@ -4,6 +4,7 @@ import {
   formatSpineMeta,
   getTodayIso,
   OVERVIEW_SPINE_WIDTH,
+  partitionTodos,
   type OverviewDateGroupSegment,
   type OverviewGapSegment,
 } from '../lib/timeline-utils'
@@ -11,11 +12,21 @@ import type { TodoItem } from '../types/todo-types'
 import { cn } from '@/lib/utils'
 import TodoRelationBadge from './TodoRelationBadge'
 
-import type { GanttGranularity } from '../lib/gantt-scale'
+import { filterTodosByRangeFilter, parseRangeFilter, type GanttGranularity, type GanttRange } from '../lib/gantt-scale'
 
 type TimelineOverviewProps = {
   todos: TodoItem[]
   granularity: GanttGranularity
+  range: GanttRange
+}
+
+function TodayDashedLine() {
+  return (
+    <div
+      className="pointer-events-none absolute inset-x-0 top-1/2 z-[5] border-t border-dashed border-primary"
+      aria-hidden
+    />
+  )
 }
 
 function SpineLine() {
@@ -49,7 +60,7 @@ function OverviewTodoRow({ todo }: { todo: TodoItem }) {
         >
           {todo.title}
         </p>
-        <TodoRelationBadge todo={todo} compact className="shrink-0" />
+        <TodoRelationBadge todo={todo} className="shrink-0" />
       </div>
       {dueMeta ? (
         <span
@@ -74,7 +85,8 @@ function OverviewDateGroup({ group }: { group: OverviewDateGroupSegment }) {
       : 'bg-muted-foreground/55'
 
   return (
-    <div className="flex">
+    <div className="relative flex">
+      {group.showsTodayLine ? <TodayDashedLine /> : null}
       <div
         className="relative shrink-0"
         style={{ width: OVERVIEW_SPINE_WIDTH }}
@@ -106,6 +118,18 @@ function OverviewDateGroup({ group }: { group: OverviewDateGroupSegment }) {
           <OverviewTodoRow key={todo.id} todo={todo} />
         ))}
       </div>
+    </div>
+  )
+}
+
+function OverviewTodayMarkerRow() {
+  return (
+    <div className="relative flex h-5">
+      <TodayDashedLine />
+      <div className="relative shrink-0" style={{ width: OVERVIEW_SPINE_WIDTH }}>
+        <SpineLine />
+      </div>
+      <div className="min-w-0 flex-1" />
     </div>
   )
 }
@@ -157,11 +181,14 @@ function NoDateSection({ items }: { items: TodoItem[] }) {
   )
 }
 
-export default function TimelineOverview({ todos, granularity }: TimelineOverviewProps) {
-  const { segments, noDate } = useMemo(
-    () => buildOverviewSegments(todos, granularity),
-    [todos, granularity],
-  )
+export default function TimelineOverview({ todos, granularity, range }: TimelineOverviewProps) {
+  const { segments, noDate } = useMemo(() => {
+    const rangeFilter = parseRangeFilter(range)
+    const inRange = filterTodosByRangeFilter(todos, rangeFilter)
+    const { noDate: allNoDate } = partitionTodos(todos)
+    const built = buildOverviewSegments(inRange, granularity)
+    return { segments: built.segments, noDate: [...built.noDate, ...allNoDate] }
+  }, [todos, granularity, range])
 
   if (segments.length === 0 && noDate.length === 0) {
     return (
@@ -170,16 +197,25 @@ export default function TimelineOverview({ todos, granularity }: TimelineOvervie
   }
 
   return (
-    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border/60 bg-card">
-      <div className="min-h-0 flex-1 overflow-y-auto">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden border border-border/60 bg-card">
+      <div key={granularity} className="min-h-0 flex-1 overflow-y-auto">
         {segments.map((segment, index) => {
+          if (segment.type === 'today-marker') {
+            return <OverviewTodayMarkerRow key="today-marker" />
+          }
+
           if (segment.type === 'date-group') {
-            return <OverviewDateGroup key={segment.spine.dateKey} group={segment} />
+            return (
+              <OverviewDateGroup
+                key={`${granularity}-${segment.spine.dateKey}-${index}`}
+                group={segment}
+              />
+            )
           }
 
           return (
             <OverviewGapRow
-              key={`${segment.fromDate}-${segment.toDate}-${segment.kind}-${index}`}
+              key={`${granularity}-${segment.fromDate}-${segment.toDate}-${segment.kind}-${index}`}
               gap={segment}
             />
           )

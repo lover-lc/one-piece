@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react'
 import {
-  defaultRange,
   isValidGanttRangeFilter,
   type GanttGranularity,
   type GanttRange,
@@ -16,35 +15,28 @@ export type GanttPrefs = {
 
 const VALID_GRANULARITIES = new Set<GanttGranularity>(['day', 'week', 'month'])
 
-function isIsoDateLocal(value: unknown): value is string {
-  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
-}
+const EMPTY_RANGE = { rangeStart: '', rangeEnd: '' }
 
 function normalizeStoredRange(start: unknown, end: unknown): { start: string; end: string } {
+  const asString = (value: unknown) => (typeof value === 'string' ? value : '')
   return {
-    start: isIsoDateLocal(start) ? start : '',
-    end: isIsoDateLocal(end) ? end : '',
+    start: asString(start),
+    end: asString(end),
   }
+}
+
+function defaultPrefs(granularity: GanttGranularity = 'day'): GanttPrefs {
+  return { granularity, ...EMPTY_RANGE }
 }
 
 function readStoredPrefs(): GanttPrefs {
   if (typeof window === 'undefined') {
-    const range = defaultRange('day')
-    return {
-      granularity: 'day',
-      rangeStart: range.start,
-      rangeEnd: range.end,
-    }
+    return defaultPrefs()
   }
 
   const raw = localStorage.getItem(STORAGE_KEY)
   if (!raw) {
-    const range = defaultRange('day')
-    const prefs: GanttPrefs = {
-      granularity: 'day',
-      rangeStart: range.start,
-      rangeEnd: range.end,
-    }
+    const prefs = defaultPrefs()
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
     return prefs
   }
@@ -64,21 +56,11 @@ function readStoredPrefs(): GanttPrefs {
       return { granularity, rangeStart, rangeEnd }
     }
 
-    const range = defaultRange(granularity)
-    const prefs: GanttPrefs = {
-      granularity,
-      rangeStart: range.start,
-      rangeEnd: range.end,
-    }
+    const prefs = defaultPrefs(granularity)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
     return prefs
   } catch {
-    const range = defaultRange('day')
-    const prefs: GanttPrefs = {
-      granularity: 'day',
-      rangeStart: range.start,
-      rangeEnd: range.end,
-    }
+    const prefs = defaultPrefs()
     localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs))
     return prefs
   }
@@ -100,7 +82,8 @@ export function useGanttPrefs() {
   }, [])
 
   const setRange = useCallback((range: GanttRange) => {
-    if (!isValidGanttRangeFilter(range.start, range.end)) return
+    const cleared = range.start === '' && range.end === ''
+    if (!cleared && !isValidGanttRangeFilter(range.start, range.end)) return
     setPrefsState((prev) => {
       const next = { ...prev, rangeStart: range.start, rangeEnd: range.end }
       writePrefs(next)

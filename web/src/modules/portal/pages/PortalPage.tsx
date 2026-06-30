@@ -1,6 +1,5 @@
 import NotificationCenter from '../../todos/components/NotificationCenter'
 import { usePortalStats } from '../../todos/hooks/use-todos'
-import { useRealtimeTodos } from '../../../shared/hooks/use-realtime'
 import { Package, CheckSquare, Settings } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import AppCard, { PortalAppGrid } from '../components/AppCard'
@@ -9,7 +8,6 @@ import { Button } from '@/components/ui/button'
 
 export default function PortalPage() {
   const { data: stats } = usePortalStats()
-  useRealtimeTodos()
 
   return (
     <>

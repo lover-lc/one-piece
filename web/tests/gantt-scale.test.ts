@@ -133,8 +133,20 @@ describe('gantt-scale', () => {
   it('computeTodayColumnOffset returns center of today column', () => {
     const range = { start: '2026-06-22', end: '2026-06-28' }
     const columns = buildColumns('day', range)
-    const offset = computeTodayColumnOffset(columns, '2026-06-25', range)
+    const offset = computeTodayColumnOffset(columns, '2026-06-25', range, 'day')
     expect(offset).toBe(3 * GANTT_DAY_COLUMN_WIDTH + GANTT_DAY_COLUMN_WIDTH / 2)
+  })
+
+  it('computeTodayColumnOffset month view centers on month column', () => {
+    const range = { start: '2026-01-01', end: '2026-12-31' }
+    const columns = buildColumns('month', range)
+    const offset = computeTodayColumnOffset(columns, '2026-06-30', range, 'month')
+    const juneIndex = columns.findIndex((col) => col.key === '2026-06')
+    expect(juneIndex).toBeGreaterThanOrEqual(0)
+    let expected = 0
+    for (let i = 0; i < juneIndex; i++) expected += columns[i]!.widthPx
+    expected += columns[juneIndex]!.widthPx / 2
+    expect(offset).toBe(expected)
   })
 
   it('defaultRange week centers on today', () => {

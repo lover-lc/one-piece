@@ -14,10 +14,14 @@ const formState = (overrides: Partial<NegotiationFormState> = {}): NegotiationFo
   title: '标题',
   description: '',
   priority: '',
+  isAllDay: true,
+  startAt: null,
+  dueAt: null,
   startDate: '',
   dueDate: '',
   tagIds: [],
-  recurrence: 'none',
+  selectedRecurrencePresetId: 'builtin:none',
+  recurrenceRule: null,
   ...overrides,
 })
 

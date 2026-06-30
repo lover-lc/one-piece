@@ -1,4 +1,5 @@
 import type { TodoItem } from '../types/todo-types'
+import { compareTodoSchedule } from '../../../shared/lib/todo-schedule'
 import type { TodoSortField, TodoSortOrder } from '../store/todo-ui-store'
 
 export const TODO_SORT_FIELD_LABELS: Record<TodoSortField, string> = {
@@ -59,7 +60,7 @@ function compareTodos(
   let cmp = 0
   switch (field) {
     case 'dueDate':
-      cmp = (a.dueDate ?? '9999-99-99').localeCompare(b.dueDate ?? '9999-99-99')
+      cmp = compareTodoSchedule(a, b)
       break
     case 'createdAt':
       cmp = a.createdAt.localeCompare(b.createdAt)
