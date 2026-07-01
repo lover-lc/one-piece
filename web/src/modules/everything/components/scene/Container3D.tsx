@@ -1,28 +1,29 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Html } from '@react-three/drei'
-import { TransformControls } from '@react-three/drei'
 import { Box3, BoxGeometry, Color, EdgesGeometry, LineBasicMaterial, Vector3 } from 'three'
 import type { Group } from 'three'
 import { isBuiltinModelRef } from '../../lib/builtin-models'
 import BuiltinModel from './BuiltinModel'
 import CustomModel from './CustomModel'
 import type { Container } from '../../types/scene-types'
+import { DRAG_THRESHOLD_PX } from '../../lib/scene-controls'
 import { useSceneStore } from '../../store/scene-store'
+import { useDragContainer } from '../../hooks/use-drag-container'
 
 interface Container3DProps {
   container: Container
   onClick: (id: string) => void
 }
 
-export default function Container3D({ container, onClick }: Container3DProps) {
+function Container3D({ container, onClick }: Container3DProps) {
   const [hovered, setHovered] = useState(false)
   const groupRef = useRef<Group>(null)
   const isEditMode = useSceneStore((s) => s.isEditMode)
   const selectedObjectId = useSceneStore((s) => s.selectedObjectId)
   const setSelectedObjectId = useSceneStore((s) => s.setSelectedObjectId)
-  const transformMode = useSceneStore((s) => s.transformMode)
   const draftTransformsById = useSceneStore((s) => s.draftTransformsById)
-  const setDraftTransform = useSceneStore((s) => s.setDraftTransform)
+
+  const { handlePointerDown: handleDragStart } = useDragContainer(container.id)
 
   const { position, modelRef } = container
   const draft = draftTransformsById[container.id]
@@ -36,6 +37,11 @@ export default function Container3D({ container, onClick }: Container3DProps) {
   } | null>(null)
 
   function handleClick() {
+    const { pointerDragDistance, isCameraDragging } = useSceneStore.getState()
+    if (isCameraDragging || pointerDragDistance >= DRAG_THRESHOLD_PX) {
+      return
+    }
+
     if (isEditMode) {
       setSelectedObjectId(container.id)
       return
@@ -77,7 +83,6 @@ export default function Container3D({ container, onClick }: Container3DProps) {
     const [sx, sy, sz] = selectionBox.size
     return new EdgesGeometry(new BoxGeometry(sx, sy, sz))
   }, [selectionBox])
-  const edgesMaterial = useMemo(() => new LineBasicMaterial({ color: new Color('#22c55e') }), [])
 
   return (
     <group
@@ -90,19 +95,24 @@ export default function Container3D({ container, onClick }: Container3DProps) {
         <BuiltinModel
           modelRef={modelRef}
           onClick={handleClick}
+          onPointerDown={isEditMode ? handleDragStart : undefined}
           onPointerOver={() => setHovered(true)}
           onPointerOut={() => setHovered(false)}
         />
       ) : isCustomGlb ? (
         <group
           onClick={handleClick}
+          onPointerDown={isEditMode ? handleDragStart : undefined}
           onPointerOver={() => setHovered(true)}
           onPointerOut={() => setHovered(false)}
         >
           <CustomModel url={modelRef} />
         </group>
       ) : (
-        <group onClick={handleClick}>
+        <group
+          onClick={handleClick}
+          onPointerDown={isEditMode ? handleDragStart : undefined}
+        >
           <mesh>
             <boxGeometry args={[0.5, 0.5, 0.5]} />
             <meshStandardMaterial color="#9E9E9E" />
@@ -112,28 +122,11 @@ export default function Container3D({ container, onClick }: Container3DProps) {
 
       {isSelected && selectionBox && edgesGeometry ? (
         <group position={selectionBox.center}>
-          <lineSegments geometry={edgesGeometry} material={edgesMaterial} />
+          <lineSegments
+            geometry={edgesGeometry}
+            material={useMemo(() => new LineBasicMaterial({ color: new Color('#22c55e') }), [])}
+          />
         </group>
-      ) : null}
-
-      {isEditMode && isSelected && groupRef.current ? (
-        <TransformControls
-          object={groupRef.current}
-          mode={transformMode}
-          showX={transformMode !== 'scale'}
-          showZ={transformMode !== 'scale'}
-          onObjectChange={() => {
-            const g = groupRef.current
-            if (!g) return
-            setDraftTransform(container.id, {
-              x: g.position.x,
-              y: g.position.y,
-              z: g.position.z,
-              rotationY: g.rotation.y,
-              scale: g.scale.x,
-            })
-          }}
-        />
       ) : null}
 
       {hovered && (
@@ -146,3 +139,8 @@ export default function Container3D({ container, onClick }: Container3DProps) {
     </group>
   )
 }
+
+export default memo(Container3D, (prev, next) =>
+  prev.container === next.container &&
+  prev.onClick === next.onClick
+)

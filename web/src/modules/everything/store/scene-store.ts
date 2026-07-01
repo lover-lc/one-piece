@@ -1,4 +1,7 @@
 import { create } from 'zustand'
+import type { RefObject } from 'react'
+import type { Group } from 'three'
+import type { JoystickMoveInput } from '../lib/scene-controls'
 
 interface SceneState {
   selectedContainerId: string | null
@@ -7,8 +10,15 @@ interface SceneState {
   showItemsModal: boolean
   setShowItemsModal: (show: boolean) => void
 
-  isPointerLocked: boolean
-  setPointerLocked: (locked: boolean) => void
+  isCameraDragging: boolean
+  setCameraDragging: (dragging: boolean) => void
+
+  pointerDragDistance: number
+  setPointerDragDistance: (distance: number) => void
+  resetPointerDrag: () => void
+
+  joystickInput: JoystickMoveInput
+  setJoystickInput: (input: JoystickMoveInput) => void
 
   isEditMode: boolean
   setEditMode: (enabled: boolean) => void
@@ -16,8 +26,17 @@ interface SceneState {
   selectedObjectId: string | null
   setSelectedObjectId: (id: string | null) => void
 
-  transformMode: 'rotate' | 'scale'
-  setTransformMode: (mode: 'rotate' | 'scale') => void
+  isDraggingObject: boolean
+  setDraggingObject: (dragging: boolean) => void
+
+  hoveredObjectId: string | null
+  setHoveredObjectId: (id: string | null) => void
+
+  showModelSelectionModal: boolean
+  setShowModelSelectionModal: (show: boolean) => void
+
+  containerGroupRefs: Record<string, RefObject<Group>>
+  setContainerGroupRef: (id: string, ref: RefObject<Group>) => void
 
   draftTransformsById: Record<
     string,
@@ -56,8 +75,15 @@ export const useSceneStore = create<SceneState>((set) => ({
   showItemsModal: false,
   setShowItemsModal: (show) => set({ showItemsModal: show }),
 
-  isPointerLocked: false,
-  setPointerLocked: (locked) => set({ isPointerLocked: locked }),
+  isCameraDragging: false,
+  setCameraDragging: (dragging) => set({ isCameraDragging: dragging }),
+
+  pointerDragDistance: 0,
+  setPointerDragDistance: (distance) => set({ pointerDragDistance: distance }),
+  resetPointerDrag: () => set({ pointerDragDistance: 0 }),
+
+  joystickInput: { x: 0, y: 0 },
+  setJoystickInput: (input) => set({ joystickInput: input }),
 
   isEditMode: false,
   setEditMode: (enabled) => set({ isEditMode: enabled }),
@@ -65,8 +91,23 @@ export const useSceneStore = create<SceneState>((set) => ({
   selectedObjectId: null,
   setSelectedObjectId: (id) => set({ selectedObjectId: id }),
 
-  transformMode: 'rotate',
-  setTransformMode: (mode) => set({ transformMode: mode }),
+  isDraggingObject: false,
+  setDraggingObject: (dragging) => set({ isDraggingObject: dragging }),
+
+  hoveredObjectId: null,
+  setHoveredObjectId: (id) => set({ hoveredObjectId: id }),
+
+  showModelSelectionModal: false,
+  setShowModelSelectionModal: (show) => set({ showModelSelectionModal: show }),
+
+  containerGroupRefs: {},
+  setContainerGroupRef: (id, ref) =>
+    set((state) => ({
+      containerGroupRefs: {
+        ...state.containerGroupRefs,
+        [id]: ref,
+      },
+    })),
 
   draftTransformsById: {},
   setDraftTransform: (id, transform) =>
@@ -88,10 +129,6 @@ export function openContainerModal(containerId: string) {
   const store = useSceneStore.getState()
   store.setSelectedContainerId(containerId)
   store.setShowItemsModal(true)
-  store.setPointerLocked(false)
-  if (document.pointerLockElement) {
-    document.exitPointerLock()
-  }
 }
 
 export function closeContainerModal() {

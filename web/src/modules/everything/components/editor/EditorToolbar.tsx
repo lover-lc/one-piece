@@ -1,43 +1,28 @@
-import { Plus, RotateCcw, Save, Scale, Trash2, Pencil } from 'lucide-react'
+import { Plus, Save, Trash2, Pencil } from 'lucide-react'
 import { useMemo } from 'react'
 import {
-  useCreateContainer,
   useDeleteContainer,
   useUpdateContainersBatch,
 } from '../../hooks/use-containers'
 import { useSceneStore } from '../../store/scene-store'
-
-const SOFA_MODEL = 'everything-models/sofa_glb.glb'
-const CABINET_MODEL = 'everything-models/bathroom_sink_cabinet.glb'
 
 export default function EditorToolbar() {
   const isEditMode = useSceneStore((s) => s.isEditMode)
   const setEditMode = useSceneStore((s) => s.setEditMode)
   const selectedObjectId = useSceneStore((s) => s.selectedObjectId)
   const setSelectedObjectId = useSceneStore((s) => s.setSelectedObjectId)
-  const transformMode = useSceneStore((s) => s.transformMode)
-  const setTransformMode = useSceneStore((s) => s.setTransformMode)
   const draftTransformsById = useSceneStore((s) => s.draftTransformsById)
   const clearDraftTransforms = useSceneStore((s) => s.clearDraftTransforms)
   const setShowItemsModal = useSceneStore((s) => s.setShowItemsModal)
   const setSelectedContainerId = useSceneStore((s) => s.setSelectedContainerId)
+  const setShowModelSelectionModal = useSceneStore((s) => s.setShowModelSelectionModal)
 
-  const createContainer = useCreateContainer()
   const deleteContainer = useDeleteContainer()
   const updateContainersBatch = useUpdateContainersBatch()
 
   const canActOnSelection = Boolean(selectedObjectId)
   const selectionLabel = useMemo(() => (selectedObjectId ? '已选中' : '未选中'), [selectedObjectId])
   const hasUnsavedChanges = Object.keys(draftTransformsById).length > 0
-
-  async function handleAddCabinet() {
-    await createContainer.mutateAsync({
-      name: '浴室柜',
-      position: { x: 0.8, y: 0, z: -0.8, rotationY: 0, scale: 1 },
-      modelRef: CABINET_MODEL,
-      modelType: 'custom',
-    })
-  }
 
   async function handleSave() {
     const updates = Object.entries(draftTransformsById).map(([id, t]) => ({
@@ -102,34 +87,6 @@ export default function EditorToolbar() {
 
         <button
           type="button"
-          onClick={() => setTransformMode('rotate')}
-          disabled={!isEditMode || !canActOnSelection}
-          className={[
-            'inline-flex items-center gap-1.5 rounded-button px-3 py-2 text-sm',
-            transformMode === 'rotate' ? 'bg-bg-hover text-text' : 'text-text',
-            !isEditMode || !canActOnSelection ? 'opacity-40' : 'hover:bg-bg-hover',
-          ].join(' ')}
-        >
-          <RotateCcw className="size-4" />
-          旋转
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setTransformMode('scale')}
-          disabled={!isEditMode || !canActOnSelection}
-          className={[
-            'inline-flex items-center gap-1.5 rounded-button px-3 py-2 text-sm',
-            transformMode === 'scale' ? 'bg-bg-hover text-text' : 'text-text',
-            !isEditMode || !canActOnSelection ? 'opacity-40' : 'hover:bg-bg-hover',
-          ].join(' ')}
-        >
-          <Scale className="size-4" />
-          缩放
-        </button>
-
-        <button
-          type="button"
           onClick={() => void handleRemoveSelected()}
           disabled={!isEditMode || !canActOnSelection || deleteContainer.isPending}
           className={[
@@ -145,15 +102,15 @@ export default function EditorToolbar() {
 
         <button
           type="button"
-          onClick={() => void handleAddCabinet()}
-          disabled={!isEditMode || createContainer.isPending}
+          onClick={() => setShowModelSelectionModal(true)}
+          disabled={!isEditMode}
           className={[
             'inline-flex items-center gap-1.5 rounded-button px-3 py-2 text-sm text-text',
             !isEditMode ? 'opacity-40' : 'hover:bg-bg-hover',
           ].join(' ')}
         >
           <Plus className="size-4" />
-          添加柜子
+          添加容器
         </button>
 
         <button
@@ -169,9 +126,6 @@ export default function EditorToolbar() {
           维护物品
         </button>
       </div>
-
-      {/* hidden constant to keep bundlers from tree-shaking */}
-      <span className="hidden">{SOFA_MODEL}</span>
     </div>
   )
 }

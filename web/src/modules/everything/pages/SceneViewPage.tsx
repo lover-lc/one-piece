@@ -6,6 +6,7 @@ import ControlsHint from '../components/ui/ControlsHint'
 import ContainerItemsModal from '../components/ui/ContainerItemsModal'
 import WebGLUnsupportedPage from '../components/WebGLUnsupportedPage'
 import EditorToolbar from '../components/editor/EditorToolbar'
+import MobileJoystick from '../components/ui/MobileJoystick'
 import { useHasScene } from '../hooks/use-scene-config'
 import { isWebGLSupported } from '../lib/webgl-check'
 
@@ -35,6 +36,7 @@ export default function SceneViewPage() {
     <SceneErrorBoundary>
       <SceneCanvas />
       <EditorToolbar />
+      <MobileJoystick />
       <ControlsHint />
       <ContainerItemsModal />
     </SceneErrorBoundary>
