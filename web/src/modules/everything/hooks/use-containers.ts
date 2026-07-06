@@ -1,4 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  nextContainerSortOrder,
+  persistContainerSortOrder,
+} from '../../../shared/lib/container-sort-order'
 import { supabase } from '../../../shared/lib/supabase'
 import {
   toContainer,
@@ -11,6 +15,14 @@ import {
 
 const CONTAINER_SELECT = '*'
 
+export const DEFAULT_CONTAINER_POSITION: Position3D = {
+  x: 0,
+  y: 0,
+  z: 0,
+  rotationY: 0,
+  scale: 1,
+}
+
 export function useContainers() {
   return useQuery({
     queryKey: ['containers'],
@@ -21,7 +33,8 @@ export function useContainers() {
       const { data, error } = await supabase
         .from('containers')
         .select(CONTAINER_SELECT)
-        .order('name')
+        .order('sort_order', { ascending: true })
+        .order('name', { ascending: true })
 
       if (error) throw error
       return (data as DbContainer[]).map(toContainer)
@@ -56,10 +69,13 @@ export function useCreateContainer() {
   return useMutation({
     mutationFn: async (input: ContainerInsert) => {
       if (!supabase) throw new Error('未配置 Supabase')
+      if (!input.areaId) throw new Error('容器必须指定区域')
+
+      const sortOrder = await nextContainerSortOrder(supabase, input.areaId)
 
       const { data, error } = await supabase
         .from('containers')
-        .insert(toDbContainer(input))
+        .insert({ ...toDbContainer(input), sort_order: sortOrder })
         .select(CONTAINER_SELECT)
         .single()
 
@@ -107,6 +123,85 @@ export function useDeleteContainer() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['containers'] })
+      queryClient.invalidateQueries({ queryKey: ['items'] })
+    },
+  })
+}
+
+export function useUpdateContainer() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      name?: string
+      areaId?: string
+    }) => {
+      if (!supabase) throw new Error('未配置 Supabase')
+
+      const updates: Partial<DbContainer> = {}
+      if (input.name !== undefined) updates.name = input.name
+      if (input.areaId !== undefined) updates.area_id = input.areaId
+
+      const { data, error } = await supabase
+        .from('containers')
+        .update(updates)
+        .eq('id', input.id)
+        .select(CONTAINER_SELECT)
+        .single()
+
+      if (error) throw error
+      return toContainer(data as DbContainer)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['containers'] })
+      queryClient.invalidateQueries({ queryKey: ['items'] })
+    },
+  })
+}
+
+export function useReorderContainers() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { areaId: string; orderedIds: string[] }) => {
+      if (!supabase) throw new Error('未配置 Supabase')
+      await persistContainerSortOrder(
+        supabase,
+        input.areaId,
+        input.orderedIds,
+      )
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['containers'] })
+    },
+  })
+}
+
+export function useMigrateContainerToArea() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: { containerId: string; targetAreaId: string }) => {
+      if (!supabase) throw new Error('未配置 Supabase')
+
+      const { error: containerError } = await supabase
+        .from('containers')
+        .update({ area_id: input.targetAreaId })
+        .eq('id', input.containerId)
+
+      if (containerError) throw containerError
+
+      const { error: itemsError } = await supabase
+        .from('items')
+        .update({ area_id: input.targetAreaId })
+        .eq('container_id', input.containerId)
+
+      if (itemsError) throw itemsError
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['containers'] })
+      queryClient.invalidateQueries({ queryKey: ['items'] })
     },
   })
 }

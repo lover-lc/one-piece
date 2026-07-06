@@ -174,6 +174,40 @@ export function useBatchUpdateItemsCategory() {
   })
 }
 
+export function useBatchUpdateItemsLocation() {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (input: {
+      itemIds: string[]
+      areaId: string
+      containerId?: string | null
+    }) => {
+      if (!supabase) {
+        throw new Error('未配置 Supabase')
+      }
+      if (input.itemIds.length === 0) return
+
+      const updates: { area_id: string; container_id?: string | null } = {
+        area_id: input.areaId,
+      }
+      if (input.containerId !== undefined) {
+        updates.container_id = input.containerId
+      }
+
+      const { error } = await supabase
+        .from('items')
+        .update(updates)
+        .in('id', input.itemIds)
+
+      if (error) throw error
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['items'] })
+    },
+  })
+}
+
 export function useBatchDeleteItems() {
   const queryClient = useQueryClient()
 

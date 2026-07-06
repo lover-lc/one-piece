@@ -14,6 +14,7 @@ export interface DbContainer {
   scene_id: string | null
   name: string
   area_id: string | null
+  sort_order: number
   position_3d: Position3D
   model_ref: string
   model_type: 'builtin' | 'custom'
@@ -27,6 +28,7 @@ export interface Container {
   sceneId: string | null
   name: string
   areaId: string | null
+  sortOrder: number
   position: Position3D
   modelRef: string
   modelType: 'builtin' | 'custom'
@@ -98,6 +100,7 @@ export function toContainer(db: DbContainer): Container {
     sceneId: db.scene_id,
     name: db.name,
     areaId: db.area_id,
+    sortOrder: db.sort_order ?? 0,
     position: db.position_3d,
     modelRef: db.model_ref,
     modelType: db.model_type,

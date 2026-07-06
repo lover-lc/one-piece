@@ -1,12 +1,21 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { HelpCircle } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
-import DeleteConfirmSheet, {
-  type DeleteAction,
-  type ManageEntity,
-  type ManageEntityType,
-} from '../components/DeleteConfirmSheet'
-import ManageList from '../components/ManageList'
+import {
+  useContainers,
+  useDeleteContainer,
+  useMigrateContainerToArea,
+} from '../../everything/hooks/use-containers'
+import AreaContainerManagePanel, {
+  toManageEntity,
+} from '../components/AreaContainerManagePanel'
+import EntityMigrationDialog, {
+  SCATTERED_ITEMS_KEY,
+  type AreaMigrationAssignment,
+  type CategoryMigrationAssignment,
+  type ContainerMigrationAssignment,
+} from '../components/EntityMigrationDialog'
+import ManageList, { type ManageEntity } from '../components/ManageList'
 import {
   useAreas,
   useCreateArea,
@@ -22,9 +31,8 @@ import {
   useUpdateCategory,
 } from '../hooks/use-categories'
 import {
-  useBatchDeleteItems,
-  useBatchUpdateItemsArea,
   useBatchUpdateItemsCategory,
+  useBatchUpdateItemsLocation,
   useItems,
 } from '../hooks/use-items'
 import {
@@ -45,6 +53,12 @@ import { supabase } from '../../../shared/lib/supabase'
 import type { Item } from '../lib/types'
 
 type ManageMode = 'area' | 'category' | 'unit'
+
+type DeleteTarget =
+  | { kind: 'area'; entity: ManageEntity }
+  | { kind: 'container'; entity: ManageEntity }
+  | { kind: 'category'; entity: ManageEntity }
+  | { kind: 'unit'; entity: ManageEntity }
 
 function EmptyDeleteDialog({
   entityName,
@@ -101,7 +115,7 @@ function EmptyDeleteDialog({
 
 function countItemsByField(
   items: Item[],
-  field: 'areaId' | 'categoryId' | 'unitId',
+  field: 'areaId' | 'categoryId' | 'unitId' | 'containerId',
 ): Record<string, number> {
   const counts: Record<string, number> = {}
   for (const item of items) {
@@ -112,7 +126,9 @@ function countItemsByField(
   return counts
 }
 
-function findUncategorized(entities: ManageEntity[]): ManageEntity | undefined {
+function findUncategorized(
+  entities: Array<{ id: string; isSystemReserved: boolean; name: string }>,
+) {
   return entities.find(
     (e) => e.isSystemReserved && e.name === SYSTEM_RESERVED_NAME,
   )
@@ -123,9 +139,7 @@ export default function ManagePage() {
   const importInputRef = useRef<HTMLInputElement>(null)
 
   const [mode, setMode] = useState<ManageMode>('area')
-  const [entityToDelete, setEntityToDelete] = useState<ManageEntity | null>(
-    null,
-  )
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
   const [isImporting, setIsImporting] = useState(false)
@@ -135,6 +149,8 @@ export default function ManagePage() {
   const { data: categories = [], isLoading: categoriesLoading } =
     useCategories()
   const { data: units = [], isLoading: unitsLoading } = useUnits()
+  const { data: containers = [], isLoading: containersLoading } =
+    useContainers()
   const { data: items = [] } = useItems()
 
   const createArea = useCreateArea()
@@ -149,47 +165,81 @@ export default function ManagePage() {
   const reorderAreas = useReorderAreas()
   const reorderCategories = useReorderCategories()
   const reorderUnits = useReorderUnits()
-  const batchUpdateItemsArea = useBatchUpdateItemsArea()
+  const deleteContainer = useDeleteContainer()
+  const migrateContainerToArea = useMigrateContainerToArea()
+  const batchUpdateItemsLocation = useBatchUpdateItemsLocation()
   const batchUpdateItemsCategory = useBatchUpdateItemsCategory()
-  const batchDeleteItems = useBatchDeleteItems()
 
-  const areaCounts = useMemo(
-    () => countItemsByField(items, 'areaId'),
-    [items],
-  )
-  const categoryCounts = useMemo(
-    () => countItemsByField(items, 'categoryId'),
-    [items],
-  )
   const unitCounts = useMemo(
     () => countItemsByField(items, 'unitId'),
     [items],
   )
 
-  const deleteItemCount = entityToDelete
-    ? mode === 'area'
-      ? (areaCounts[entityToDelete.id] ?? 0)
-      : mode === 'category'
-        ? (categoryCounts[entityToDelete.id] ?? 0)
-        : (unitCounts[entityToDelete.id] ?? 0)
-    : 0
+  const uncategorizedCategory = useMemo(
+    () => findUncategorized(categories),
+    [categories],
+  )
 
-  const deleteTargets = useMemo(() => {
-    if (!entityToDelete || mode === 'unit') return []
-    const list = mode === 'area' ? areas : categories
-    return list.filter(
-      (e) => !e.isSystemReserved && e.id !== entityToDelete.id,
-    )
-  }, [entityToDelete, mode, areas, categories])
+  const deleteMigrationContext = useMemo(() => {
+    if (!deleteTarget) return null
 
-  const uncategorized = useMemo(() => {
-    if (mode === 'unit') return undefined
-    const list = mode === 'area' ? areas : categories
-    return findUncategorized(list)
-  }, [mode, areas, categories])
+    if (deleteTarget.kind === 'area') {
+      const areaId = deleteTarget.entity.id
+      const areaContainers = containers
+        .filter((c) => c.areaId === areaId)
+        .map((c) => ({
+          id: c.id,
+          name: c.name,
+          itemCount: items.filter((i) => i.containerId === c.id).length,
+        }))
+      const scatteredItemCount = items.filter(
+        (i) => i.areaId === areaId && !i.containerId,
+      ).length
+      const needsMigration =
+        areaContainers.length > 0 || scatteredItemCount > 0
+
+      return {
+        kind: 'area' as const,
+        needsMigration,
+        areaContainers,
+        scatteredItemCount,
+        scatteredItemIds: items
+          .filter((i) => i.areaId === areaId && !i.containerId)
+          .map((i) => i.id),
+      }
+    }
+
+    if (deleteTarget.kind === 'container') {
+      const containerItems = items.filter(
+        (i) => i.containerId === deleteTarget.entity.id,
+      )
+      return {
+        kind: 'container' as const,
+        needsMigration: containerItems.length > 0,
+        containerItems,
+      }
+    }
+
+    if (deleteTarget.kind === 'category') {
+      const categoryItems = items.filter(
+        (i) => i.categoryId === deleteTarget.entity.id,
+      )
+      return {
+        kind: 'category' as const,
+        needsMigration: categoryItems.length > 0,
+        categoryItems,
+      }
+    }
+
+    return {
+      kind: 'unit' as const,
+      needsMigration: false,
+      unitItemCount: unitCounts[deleteTarget.entity.id] ?? 0,
+    }
+  }, [deleteTarget, containers, items, unitCounts])
 
   useEffect(() => {
-    setEntityToDelete(null)
+    setDeleteTarget(null)
   }, [mode])
 
   useEffect(() => {
@@ -198,82 +248,129 @@ export default function ManagePage() {
     return () => window.clearTimeout(timer)
   }, [toast])
 
-  function handleDeleteRequest(entity: ManageEntity) {
-    setEntityToDelete(entity)
+  function handleDeleteAreaRequest(entity: ManageEntity) {
+    setDeleteTarget({ kind: 'area', entity })
   }
 
-  async function deleteEntityOnly(id: string) {
-    if (mode === 'area') {
-      await deleteArea.mutateAsync(id)
-    } else if (mode === 'category') {
-      await deleteCategory.mutateAsync(id)
+  function handleDeleteContainerRequest(entity: ManageEntity) {
+    setDeleteTarget({ kind: 'container', entity })
+  }
+
+  function handleDeleteCategoryRequest(entity: ManageEntity) {
+    setDeleteTarget({ kind: 'category', entity })
+  }
+
+  function handleDeleteUnitRequest(entity: ManageEntity) {
+    setDeleteTarget({ kind: 'unit', entity })
+  }
+
+  async function deleteEntityOnly(target: DeleteTarget) {
+    if (target.kind === 'area') {
+      await deleteArea.mutateAsync(target.entity.id)
+    } else if (target.kind === 'category') {
+      await deleteCategory.mutateAsync(target.entity.id)
+    } else if (target.kind === 'container') {
+      await deleteContainer.mutateAsync(target.entity.id)
     } else {
-      await deleteUnit.mutateAsync(id)
+      await deleteUnit.mutateAsync(target.entity.id)
     }
   }
 
   async function handleEmptyDelete() {
-    if (!entityToDelete) return
+    if (!deleteTarget) return
     setIsDeleting(true)
     try {
-      await deleteEntityOnly(entityToDelete.id)
-      setEntityToDelete(null)
+      await deleteEntityOnly(deleteTarget)
+      setDeleteTarget(null)
     } finally {
       setIsDeleting(false)
     }
   }
 
-  async function handleDeleteWithItems(
-    action: DeleteAction,
-    targetId?: string,
-  ) {
-    if (!entityToDelete) return
-
-    const itemIds =
-      mode === 'area'
-        ? items.filter((i) => i.areaId === entityToDelete.id).map((i) => i.id)
-        : items
-            .filter((i) => i.categoryId === entityToDelete.id)
-            .map((i) => i.id)
+  async function handleAreaMigration(assignments: AreaMigrationAssignment[]) {
+    if (!deleteTarget || deleteTarget.kind !== 'area') return
+    const areaId = deleteTarget.entity.id
+    const scatteredItemIds = items
+      .filter((i) => i.areaId === areaId && !i.containerId)
+      .map((i) => i.id)
 
     setIsDeleting(true)
     try {
-      switch (action) {
-        case 'moveToOther':
-          if (!targetId) return
-          if (mode === 'area') {
-            await batchUpdateItemsArea.mutateAsync({
-              itemIds,
-              areaId: targetId,
-            })
-          } else {
-            await batchUpdateItemsCategory.mutateAsync({
-              itemIds,
-              categoryId: targetId,
-            })
-          }
-          break
-        case 'deleteAllItems':
-          await batchDeleteItems.mutateAsync(itemIds)
-          break
-        case 'moveToUncategorized':
-          if (!uncategorized) return
-          if (mode === 'area') {
-            await batchUpdateItemsArea.mutateAsync({
-              itemIds,
-              areaId: uncategorized.id,
-            })
-          } else {
-            await batchUpdateItemsCategory.mutateAsync({
-              itemIds,
-              categoryId: uncategorized.id,
-            })
-          }
-          break
+      for (const assignment of assignments) {
+        if (assignment.key === SCATTERED_ITEMS_KEY) {
+          if (scatteredItemIds.length === 0) continue
+          await batchUpdateItemsLocation.mutateAsync({
+            itemIds: scatteredItemIds,
+            areaId: assignment.targetAreaId,
+            containerId: null,
+          })
+        } else {
+          await migrateContainerToArea.mutateAsync({
+            containerId: assignment.key,
+            targetAreaId: assignment.targetAreaId,
+          })
+        }
       }
+      await deleteEntityOnly(deleteTarget)
+      setDeleteTarget(null)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
 
-      await deleteEntityOnly(entityToDelete.id)
-      setEntityToDelete(null)
+  async function handleContainerMigration(
+    assignments: ContainerMigrationAssignment[],
+    remainingAreaId: string,
+    remainingItemIds: string[],
+  ) {
+    if (!deleteTarget || deleteTarget.kind !== 'container') return
+
+    setIsDeleting(true)
+    try {
+      for (const assignment of assignments) {
+        await batchUpdateItemsLocation.mutateAsync({
+          itemIds: assignment.itemIds,
+          areaId: assignment.targetAreaId,
+          containerId: assignment.targetContainerId,
+        })
+      }
+      if (remainingItemIds.length > 0) {
+        await batchUpdateItemsLocation.mutateAsync({
+          itemIds: remainingItemIds,
+          areaId: remainingAreaId,
+          containerId: null,
+        })
+      }
+      await deleteEntityOnly(deleteTarget)
+      setDeleteTarget(null)
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
+  async function handleCategoryMigration(
+    assignments: CategoryMigrationAssignment[],
+    remainingItemIds: string[],
+  ) {
+    if (!deleteTarget || deleteTarget.kind !== 'category') return
+    if (!uncategorizedCategory) return
+
+    setIsDeleting(true)
+    try {
+      for (const assignment of assignments) {
+        await batchUpdateItemsCategory.mutateAsync({
+          itemIds: assignment.itemIds,
+          categoryId: assignment.targetCategoryId,
+        })
+      }
+      if (remainingItemIds.length > 0) {
+        await batchUpdateItemsCategory.mutateAsync({
+          itemIds: remainingItemIds,
+          categoryId: uncategorizedCategory.id,
+        })
+      }
+      await deleteEntityOnly(deleteTarget)
+      setDeleteTarget(null)
     } finally {
       setIsDeleting(false)
     }
@@ -327,6 +424,7 @@ export default function ManagePage() {
         queryClient.invalidateQueries({ queryKey: ['categories'] }),
         queryClient.invalidateQueries({ queryKey: ['units'] }),
         queryClient.invalidateQueries({ queryKey: ['items'] }),
+        queryClient.invalidateQueries({ queryKey: ['containers'] }),
       ])
       setToast('导入成功')
     } catch (err) {
@@ -336,8 +434,14 @@ export default function ManagePage() {
     }
   }
 
-  const typeLabel =
-    mode === 'area' ? '区域' : mode === 'category' ? '分类' : '计量单位'
+  const emptyDeleteTypeLabel =
+    deleteTarget?.kind === 'area'
+      ? '区域'
+      : deleteTarget?.kind === 'container'
+        ? '容器'
+        : deleteTarget?.kind === 'category'
+          ? '分类'
+          : '计量单位'
 
   return (
     <>
@@ -372,34 +476,33 @@ export default function ManagePage() {
                   : 'text-text-secondary hover:text-text',
               ].join(' ')}
             >
-              {tab === 'area' ? '区域' : tab === 'category' ? '分类' : '单位'}
+              {tab === 'area' ? '区域/容器' : tab === 'category' ? '分类' : '单位'}
             </button>
           ))}
         </div>
 
         <div className="mt-4">
           {mode === 'area' ? (
-            <ManageList
-              type="area"
-              entities={areas}
-              itemCounts={areaCounts}
-              onAdd={async (name) => {
+            <AreaContainerManagePanel
+              areas={areas}
+              areasLoading={areasLoading}
+              containersLoading={containersLoading}
+              onAddArea={async (name) => {
                 await createArea.mutateAsync({ name })
               }}
-              onRename={async (id, name) => {
+              onRenameArea={async (id, name) => {
                 await updateArea.mutateAsync({ id, name })
               }}
-              onReorder={(orderedIds) => {
+              onReorderAreas={(orderedIds) => {
                 reorderAreas.mutate(orderedIds)
               }}
-              onDeleteRequest={handleDeleteRequest}
-              isLoading={areasLoading}
+              onDeleteAreaRequest={handleDeleteAreaRequest}
+              onDeleteContainerRequest={handleDeleteContainerRequest}
             />
           ) : mode === 'category' ? (
             <ManageList
               type="category"
-              entities={categories}
-              itemCounts={categoryCounts}
+              entities={categories.map(toManageEntity)}
               onAdd={async (name) => {
                 await createCategory.mutateAsync({ name })
               }}
@@ -409,14 +512,13 @@ export default function ManagePage() {
               onReorder={(orderedIds) => {
                 reorderCategories.mutate(orderedIds)
               }}
-              onDeleteRequest={handleDeleteRequest}
+              onDeleteRequest={handleDeleteCategoryRequest}
               isLoading={categoriesLoading}
             />
           ) : (
             <ManageList
               type="unit"
-              entities={units}
-              itemCounts={unitCounts}
+              entities={units.map(toManageEntity)}
               onAdd={async (name) => {
                 await createUnit.mutateAsync({ name })
               }}
@@ -424,16 +526,17 @@ export default function ManagePage() {
                 await updateUnit.mutateAsync({ id, name })
               }}
               onToggleDisabled={async (entity) => {
-                if (!('isDisabled' in entity)) return
+                const unit = units.find((u) => u.id === entity.id)
+                if (!unit) return
                 await updateUnit.mutateAsync({
                   id: entity.id,
-                  isDisabled: !entity.isDisabled,
+                  isDisabled: !unit.isDisabled,
                 })
               }}
               onReorder={(orderedIds) => {
                 reorderUnits.mutate(orderedIds)
               }}
-              onDeleteRequest={handleDeleteRequest}
+              onDeleteRequest={handleDeleteUnitRequest}
               isLoading={unitsLoading}
             />
           )}
@@ -472,31 +575,68 @@ export default function ManagePage() {
         </section>
       </div>
 
-      {entityToDelete &&
-      (deleteItemCount === 0 || mode === 'unit') ? (
+      {deleteTarget &&
+      deleteMigrationContext &&
+      !deleteMigrationContext.needsMigration ? (
         <EmptyDeleteDialog
-          entityName={entityToDelete.name}
-          typeLabel={typeLabel}
+          entityName={deleteTarget.entity.name}
+          typeLabel={emptyDeleteTypeLabel}
           message={
-            mode === 'unit' && deleteItemCount > 0
-              ? `确定要删除「${entityToDelete.name}」吗？${deleteItemCount} 个物品的单位将被清空，数量保留。`
+            deleteTarget.kind === 'unit' &&
+            deleteMigrationContext.kind === 'unit' &&
+            deleteMigrationContext.unitItemCount > 0
+              ? `确定要删除「${deleteTarget.entity.name}」吗？${deleteMigrationContext.unitItemCount} 个物品的单位将被清空，数量保留。`
               : undefined
           }
-          onCancel={() => setEntityToDelete(null)}
+          onCancel={() => setDeleteTarget(null)}
           onConfirm={handleEmptyDelete}
           isPending={isDeleting}
         />
       ) : null}
 
-      {entityToDelete && deleteItemCount > 0 && mode !== 'unit' ? (
-        <DeleteConfirmSheet
-          open
-          onClose={() => setEntityToDelete(null)}
-          type={mode as ManageEntityType}
-          entity={entityToDelete}
-          itemCount={deleteItemCount}
-          targets={deleteTargets}
-          onConfirm={handleDeleteWithItems}
+      {deleteTarget &&
+      deleteMigrationContext?.kind === 'area' &&
+      deleteMigrationContext.needsMigration ? (
+        <EntityMigrationDialog
+          mode="deleteArea"
+          entityName={deleteTarget.entity.name}
+          areas={areas}
+          excludeAreaId={deleteTarget.entity.id}
+          containers={deleteMigrationContext.areaContainers}
+          scatteredItemCount={deleteMigrationContext.scatteredItemCount}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleAreaMigration}
+          isPending={isDeleting}
+        />
+      ) : null}
+
+      {deleteTarget &&
+      deleteMigrationContext?.kind === 'container' &&
+      deleteMigrationContext.needsMigration ? (
+        <EntityMigrationDialog
+          mode="deleteContainer"
+          entityName={deleteTarget.entity.name}
+          items={deleteMigrationContext.containerItems}
+          areas={areas}
+          containers={containers}
+          excludeContainerId={deleteTarget.entity.id}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleContainerMigration}
+          isPending={isDeleting}
+        />
+      ) : null}
+
+      {deleteTarget &&
+      deleteMigrationContext?.kind === 'category' &&
+      deleteMigrationContext.needsMigration ? (
+        <EntityMigrationDialog
+          mode="deleteCategory"
+          entityName={deleteTarget.entity.name}
+          items={deleteMigrationContext.categoryItems}
+          categories={categories}
+          excludeCategoryId={deleteTarget.entity.id}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={handleCategoryMigration}
           isPending={isDeleting}
         />
       ) : null}

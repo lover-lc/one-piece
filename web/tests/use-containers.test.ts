@@ -9,6 +9,7 @@ describe('container type mappers', () => {
       scene_id: null,
       name: '电视柜',
       area_id: 'a1',
+      sort_order: 0,
       position_3d: { x: 0, y: 0, z: -8, rotationY: 0, scale: 1 },
       model_ref: 'cabinet_tv',
       model_type: 'builtin',

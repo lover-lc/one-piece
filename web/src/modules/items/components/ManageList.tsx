@@ -10,25 +10,31 @@ import {
 import {
   SortableContext,
   arrayMove,
+  rectSortingStrategy,
   sortableKeyboardCoordinates,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Plus } from 'lucide-react'
+import { GripVertical, Pencil, Plus } from 'lucide-react'
 import { useState } from 'react'
 import SwipeRow from '../../../shared/components/ui/SwipeRow'
 import { cn } from '@/lib/utils'
-import type { Area, Category, Unit } from '../lib/types'
 import { SYSTEM_RESERVED_NAME } from '../lib/seed-defaults'
 
-export type ManageEntityType = 'area' | 'category' | 'unit'
-export type ManageEntity = Area | Category | Unit
+export type ManageEntityType = 'area' | 'category' | 'unit' | 'container'
+export type ManageEntity = {
+  id: string
+  name: string
+  isSystemReserved: boolean
+  isDisabled?: boolean
+}
 
 const TYPE_LABELS: Record<ManageEntityType, string> = {
   area: '区域',
   category: '分类',
   unit: '计量单位',
+  container: '容器',
 }
 
 function NamePromptDialog({
@@ -102,14 +108,20 @@ function NamePromptDialog({
 function SortableManageRow({
   entity,
   type,
-  count,
+  compact = false,
+  interactionMode = 'rename',
+  selected = false,
+  onSelect,
   onRename,
   onDelete,
   onToggleDisabled,
 }: {
   entity: ManageEntity
   type: ManageEntityType
-  count: number
+  compact?: boolean
+  interactionMode?: 'rename' | 'select'
+  selected?: boolean
+  onSelect?: () => void
   onRename?: () => void
   onDelete?: () => void
   onToggleDisabled?: () => void
@@ -124,43 +136,81 @@ function SortableManageRow({
     transition,
   }
 
+  function handleContentClick() {
+    if (interactionMode === 'select') {
+      onSelect?.()
+      return
+    }
+    onRename?.()
+  }
+
   return (
     <li ref={setNodeRef} style={style} className={cn(isDragging && 'z-10')}>
       <SwipeRow
         deleteDisabled={!onDelete}
         onDelete={onDelete}
-        onContentClick={onRename}
+        onContentClick={
+          interactionMode === 'select' ? onSelect : onRename
+        }
       >
         <div
           className={cn(
-            'flex items-center gap-2 px-4 py-3',
+            'flex items-center gap-1',
+            compact ? 'px-2 py-2' : 'gap-2 px-4 py-3',
             isDragging && 'shadow-md ring-1 ring-bg-hover',
+            selected && 'bg-primary/5 ring-1 ring-primary/20',
           )}
         >
           <button
             type="button"
-            className="shrink-0 touch-none rounded p-1 text-text-tertiary hover:bg-bg-hover"
+            className={cn(
+              'shrink-0 touch-none rounded text-text-tertiary hover:bg-bg-hover',
+              compact ? 'p-0.5' : 'p-1',
+            )}
             aria-label="拖动排序"
             {...attributes}
             {...listeners}
             onClick={(e) => e.stopPropagation()}
           >
-            <GripVertical className="size-4" />
+            <GripVertical className={compact ? 'size-3.5' : 'size-4'} />
           </button>
-          <span
-            className={[
-              'min-w-0 flex-1 truncate text-sm',
-              isDisabled ? 'text-status-expired' : 'text-text',
-            ].join(' ')}
+          <button
+            type="button"
+            onClick={handleContentClick}
+            className={cn(
+              'min-w-0 flex-1 truncate text-left text-text',
+              compact ? 'text-xs' : 'text-sm',
+            )}
           >
-            {entity.name}
-            {isDisabled ? (
-              <span className="ml-2 text-xs font-normal text-status-expired">
-                已停用
-              </span>
-            ) : null}
-          </span>
-          <span className="shrink-0 text-sm text-text-secondary">{count} 件</span>
+            <span
+              className={[
+                isDisabled ? 'text-status-expired' : 'text-text',
+              ].join(' ')}
+            >
+              {entity.name}
+              {isDisabled ? (
+                <span className="ml-2 text-xs font-normal text-status-expired">
+                  已停用
+                </span>
+              ) : null}
+            </span>
+          </button>
+          {interactionMode === 'select' && onRename ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation()
+                onRename()
+              }}
+              aria-label={`编辑${entity.name}`}
+              className={cn(
+                'shrink-0 rounded-button text-text-secondary hover:bg-bg-hover',
+                compact ? 'p-1' : 'p-1.5',
+              )}
+            >
+              <Pencil className={compact ? 'size-3' : 'size-3.5'} strokeWidth={2} />
+            </button>
+          ) : null}
           {type === 'unit' && onToggleDisabled ? (
             <button
               type="button"
@@ -182,27 +232,36 @@ function SortableManageRow({
 interface ManageListProps {
   type: ManageEntityType
   entities: ManageEntity[]
-  itemCounts: Record<string, number>
   onAdd: (name: string) => Promise<void>
   onRename: (id: string, name: string) => Promise<void>
   onDeleteRequest: (entity: ManageEntity) => void
   onToggleDisabled?: (entity: ManageEntity) => void
   onReorder: (orderedIds: string[]) => void
   isLoading?: boolean
+  interactionMode?: 'rename' | 'select'
+  selectedId?: string | null
+  onSelect?: (entity: ManageEntity) => void
+  addDisabled?: boolean
+  layout?: 'list' | 'grid-2'
 }
 
 export default function ManageList({
   type,
   entities,
-  itemCounts,
   onAdd,
   onRename,
   onDeleteRequest,
   onToggleDisabled,
   onReorder,
   isLoading = false,
+  interactionMode = 'rename',
+  selectedId = null,
+  onSelect,
+  addDisabled = false,
+  layout = 'list',
 }: ManageListProps) {
   const typeLabel = TYPE_LABELS[type]
+  const isGrid = layout === 'grid-2'
 
   const [showAddDialog, setShowAddDialog] = useState(false)
   const [entityToRename, setEntityToRename] = useState<ManageEntity | null>(
@@ -265,7 +324,8 @@ export default function ManageList({
         <button
           type="button"
           onClick={() => setShowAddDialog(true)}
-          className="flex items-center gap-1 rounded-button px-2 py-1.5 text-sm text-primary hover:bg-bg-hover"
+          disabled={addDisabled}
+          className="flex items-center gap-1 rounded-button px-2 py-1.5 text-sm text-primary hover:bg-bg-hover disabled:opacity-40"
         >
           <Plus className="size-4" strokeWidth={2} />
           新建
@@ -286,11 +346,15 @@ export default function ManageList({
         >
           <SortableContext
             items={entities.map((entity) => entity.id)}
-            strategy={verticalListSortingStrategy}
+            strategy={isGrid ? rectSortingStrategy : verticalListSortingStrategy}
           >
-            <ul className="mt-3 space-y-2">
+            <ul
+              className={cn(
+                'mt-3',
+                isGrid ? 'grid grid-cols-2 gap-2' : 'space-y-2',
+              )}
+            >
               {entities.map((entity) => {
-                const count = itemCounts[entity.id] ?? 0
                 const isSystem = entity.isSystemReserved
 
                 return (
@@ -298,7 +362,14 @@ export default function ManageList({
                     key={entity.id}
                     entity={entity}
                     type={type}
-                    count={count}
+                    compact={isGrid}
+                    interactionMode={interactionMode}
+                    selected={selectedId === entity.id}
+                    onSelect={
+                      interactionMode === 'select' && onSelect
+                        ? () => onSelect(entity)
+                        : undefined
+                    }
                     onRename={
                       isSystem ? undefined : () => setEntityToRename(entity)
                     }
