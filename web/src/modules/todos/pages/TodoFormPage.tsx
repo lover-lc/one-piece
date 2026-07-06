@@ -96,7 +96,7 @@ function FormRow({
   rowRef,
   highlighted,
 }: {
-  label: string
+  label?: string
   children: ReactNode
   error?: string | null
   rowRef?: RefObject<HTMLDivElement | null>
@@ -113,7 +113,9 @@ function FormRow({
           'bg-amber-50 ring-1 ring-inset ring-amber-200 dark:bg-amber-950/30 dark:ring-amber-800/50',
       )}
     >
-      <label className="mb-1 block text-xs text-text-secondary">{label}</label>
+      {label ? (
+        <label className="mb-1 block text-xs text-text-secondary">{label}</label>
+      ) : null}
       {children}
       {error ? <p className="mt-1 text-xs text-status-expired">{error}</p> : null}
     </div>
@@ -1008,7 +1010,7 @@ export default function TodoFormPage() {
               onClick={() => setReminderSheetOpen(true)}
             />
           </FormRow>
-          <FormRow label="标签" highlighted={changedFields.has('tagIds')}>
+          <FormRow highlighted={changedFields.has('tagIds')}>
             {fieldsLocked ? (
               <div className="flex flex-wrap gap-2">
                 {displayedTags.length === 0 ? (
