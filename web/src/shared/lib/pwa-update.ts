@@ -15,7 +15,6 @@ type Listener = (state: PwaUpdateState) => void
 
 let listeners: Listener[] = []
 let currentState: PwaUpdateState = { phase: 'idle', progress: 0 }
-let updateSW: ((reloadPage?: boolean) => Promise<void>) | undefined
 let updateFlowRunning = false
 
 function hasRecentUpdateLock(): boolean {
@@ -154,7 +153,6 @@ async function animateProgress(from: number, to: number, durationMs: number) {
 async function runUpdateFlow() {
   if (updateFlowRunning) return
   if (hasRecentUpdateLock()) return
-  if (!updateSW) return
 
   updateFlowRunning = true
   setUpdateLock()
@@ -172,7 +170,8 @@ async function runUpdateFlow() {
     emit({ phase: 'reloading', progress: 95 })
     await animateProgress(95, 100, 300)
 
-    await updateSW(true)
+    clearUpdateLock()
+    window.location.reload()
   } catch {
     clearUpdateLock()
     updateFlowRunning = false
@@ -192,7 +191,8 @@ async function checkRemoteVersion(registration?: ServiceWorkerRegistration) {
 
     const data = (await response.json()) as { version?: string }
     if (data.version && data.version !== __APP_VERSION__) {
-      await registration?.update().catch(() => {})
+      void registration?.update().catch(() => {})
+      void runUpdateFlow()
     }
   } catch {
     // Offline or transient network errors should not block app usage.
@@ -215,9 +215,9 @@ function scheduleUpdateChecks(registration: ServiceWorkerRegistration) {
 export function initPwaUpdate() {
   if (import.meta.env.DEV) return
 
-  updateSW = registerSW({
+  registerSW({
     immediate: true,
-    onNeedRefresh() {
+    onNeedReload() {
       void runUpdateFlow()
     },
     onRegisteredSW(_swUrl, registration) {
