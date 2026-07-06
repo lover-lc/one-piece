@@ -2,6 +2,7 @@ import { ChevronRight } from 'lucide-react'
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Button } from '@/components/ui/button'
 import BottomSheet from '../../../shared/components/ui/BottomSheet'
 import DateField, {
   dateFieldFromIso,
@@ -140,6 +141,62 @@ function PickerButton({
   )
 }
 
+function MultiOptionSheet({
+  open,
+  title,
+  options,
+  selectedIds,
+  onToggle,
+  onConfirm,
+  onClose,
+  showMemberAvatar = false,
+}: {
+  open: boolean
+  title: string
+  options: {
+    id: string
+    name: string
+    member?: FamilyMember
+  }[]
+  selectedIds: string[]
+  onToggle: (id: string) => void
+  onConfirm: () => void
+  onClose: () => void
+  showMemberAvatar?: boolean
+}) {
+  return (
+    <BottomSheet open={open} onClose={onClose} title={title}>
+      <ul className="max-h-[50svh] overflow-y-auto">
+        {options.map((opt) => {
+          const selected = selectedIds.includes(opt.id)
+          return (
+            <li key={opt.id}>
+              <button
+                type="button"
+                onClick={() => onToggle(opt.id)}
+                className={`flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-bg-hover ${
+                  selected ? 'font-medium text-primary' : 'text-text'
+                }`}
+              >
+                {showMemberAvatar && opt.member ? (
+                  <MemberAvatar member={opt.member} size="sm" />
+                ) : null}
+                <span className="min-w-0 flex-1 truncate">{opt.name}</span>
+                {selected ? <span className="text-xs text-primary">已选</span> : null}
+              </button>
+            </li>
+          )
+        })}
+      </ul>
+      <div className="border-t border-bg-hover px-4 py-3">
+        <Button type="button" className="w-full" onClick={onConfirm}>
+          确定
+        </Button>
+      </div>
+    </BottomSheet>
+  )
+}
+
 function OptionSheet({
   open,
   title,
@@ -229,6 +286,7 @@ export default function TodoFormPage() {
   const [description, setDescription] = useState('')
   const [listId, setListId] = useState('')
   const [assigneeId, setAssigneeId] = useState('')
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([])
   const [priority, setPriority] = useState<TodoPriority | ''>('')
   const [isAllDay, setIsAllDay] = useState(false)
   const [startField, setStartField] = useState<DateFieldValue>({ iso: null, hasTime: false })
@@ -270,6 +328,13 @@ export default function TodoFormPage() {
     setDescription(source?.description ?? existing.description ?? '')
     setListId(effectiveListIdFromTodo(existing))
     setAssigneeId(existing.assigneeId)
+    setAssigneeIds(
+      existing.requireFeedback
+        ? []
+        : existing.assigneeIds?.length
+          ? existing.assigneeIds
+          : [existing.assigneeId],
+    )
     setPriority(source?.priority ?? existing.priority ?? '')
     setIsAllDay(source?.isAllDay ?? existing.isAllDay)
     setStartField(
@@ -301,7 +366,10 @@ export default function TodoFormPage() {
   const selectableLists = lists
 
   useEffect(() => {
-    if (currentMemberId) setAssigneeId((prev) => prev || currentMemberId)
+    if (currentMemberId) {
+      setAssigneeId((prev) => prev || currentMemberId)
+      setAssigneeIds((prev) => (prev.length > 0 ? prev : [currentMemberId]))
+    }
   }, [currentMemberId])
 
   useEffect(() => {
@@ -314,6 +382,7 @@ export default function TodoFormPage() {
   const selectedList = lists.find((l) => l.id === listId) ?? null
   const selectedListName = selectedList ? listOptionLabel(selectedList) : null
   const selectedAssignee = members.find((m) => m.id === assigneeId) ?? null
+  const selectedAssignees = members.filter((m) => assigneeIds.includes(m.id))
   const reminderOptions = getEnabledReminderOptions(
     customReminderPresets,
     reminderPresetOrder,
@@ -406,7 +475,8 @@ export default function TodoFormPage() {
       description,
       privateListId,
       sharedListId,
-      assigneeId,
+      assigneeId: assignsToOther ? assigneeId : (assigneeIds[0] ?? assigneeId),
+      assigneeIds: assignsToOther ? undefined : assigneeIds,
       priority: priority || null,
       isAllDay,
       startAt,
@@ -430,7 +500,11 @@ export default function TodoFormPage() {
     const nextFieldErrors: Partial<Record<FormFieldKey, string>> = {}
     if (!title.trim()) nextFieldErrors.title = '标题不能为空'
     if (!listId) nextFieldErrors.listId = '请选择清单'
-    if (!assigneeId) nextFieldErrors.assigneeId = '请选择负责人'
+    if (!assigneeId && !assignsToOther) nextFieldErrors.assigneeId = '请选择负责人'
+    if (!assignsToOther && assigneeIds.length === 0) {
+      nextFieldErrors.assigneeId = '请选择负责人'
+    }
+    if (assignsToOther && !assigneeId) nextFieldErrors.assigneeId = '请选择负责人'
     if (isAllDay && !dueAt) {
       nextFieldErrors.dateRange = '全天待办请选择截止日期'
     }
@@ -845,11 +919,19 @@ export default function TodoFormPage() {
                 )}
               >
                 <span className="flex min-w-0 items-center gap-2">
-                  {selectedAssignee ? (
-                    <>
-                      <MemberAvatar member={selectedAssignee} size="sm" />
-                      <span className="truncate text-text">{selectedAssignee.name}</span>
-                    </>
+                  {assignsToOther ? (
+                    selectedAssignee ? (
+                      <>
+                        <MemberAvatar member={selectedAssignee} size="sm" />
+                        <span className="truncate text-text">{selectedAssignee.name}</span>
+                      </>
+                    ) : (
+                      <span className="truncate text-text-tertiary">请选择</span>
+                    )
+                  ) : selectedAssignees.length > 0 ? (
+                    <span className="truncate text-text">
+                      {selectedAssignees.map((member) => member.name).join('、')}
+                    </span>
                   ) : (
                     <span className="truncate text-text-tertiary">请选择</span>
                   )}
@@ -1023,15 +1105,49 @@ export default function TodoFormPage() {
         onClose={() => setListSheetOpen(false)}
       />
 
-      <OptionSheet
-        open={assigneeSheetOpen}
-        title="选择负责人"
-        options={members.map((m) => ({ id: m.id, name: m.name, member: m }))}
-        selectedId={assigneeId || null}
-        onSelect={setAssigneeId}
-        onClose={() => setAssigneeSheetOpen(false)}
-        showMemberAvatar
-      />
+      {assignsToOther ? (
+        <OptionSheet
+          open={assigneeSheetOpen}
+          title="选择负责人"
+          options={members.map((m) => ({ id: m.id, name: m.name, member: m }))}
+          selectedId={assigneeId || null}
+          onSelect={(id) => {
+            setAssigneeId(id)
+            setAssigneeIds([])
+          }}
+          onClose={() => setAssigneeSheetOpen(false)}
+          showMemberAvatar
+        />
+      ) : (
+        <MultiOptionSheet
+          open={assigneeSheetOpen}
+          title="选择负责人"
+          options={members.map((m) => ({ id: m.id, name: m.name, member: m }))}
+          selectedIds={assigneeIds}
+          onToggle={(id) => {
+            setAssigneeIds((prev) => {
+              if (prev.includes(id)) {
+                if (prev.length === 1) return prev
+                return prev.filter((memberId) => memberId !== id)
+              }
+              return [...prev, id]
+            })
+          }}
+          onConfirm={() => {
+            const next =
+              assigneeIds.length > 0
+                ? assigneeIds
+                : currentMemberId
+                  ? [currentMemberId]
+                  : []
+            setAssigneeIds(next)
+            setAssigneeId(next[0] ?? '')
+            setAssigneeSheetOpen(false)
+          }}
+          onClose={() => setAssigneeSheetOpen(false)}
+          showMemberAvatar
+        />
+      )}
 
       <OptionSheet
         open={prioritySheetOpen}

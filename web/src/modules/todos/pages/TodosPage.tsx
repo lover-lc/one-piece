@@ -12,6 +12,7 @@ import TodoCard from '../components/TodoCard'
 import { useTimelineMode } from '../hooks/use-timeline-mode'
 import { useGanttPrefs } from '../hooks/use-gantt-prefs'
 import { applyTodoFilters } from '../lib/todo-filter'
+import { isTodoVisibleInListForMember } from '../lib/todo-list-visibility'
 import { useTodoUiStore } from '../store/todo-ui-store'
 import { buildListGroups } from '../lib/todo-list-placement'
 import { canDeleteTodo } from '../lib/negotiation-ui'
@@ -137,7 +138,7 @@ export default function TodosPage() {
         tagFilterIds,
         sortField,
         sortOrder,
-      }),
+      }).filter((todo) => isTodoVisibleInListForMember(todo, currentMemberId)),
     [
       isTimeline,
       todos,
@@ -147,6 +148,7 @@ export default function TodosPage() {
       tagFilterIds,
       sortField,
       sortOrder,
+      currentMemberId,
     ],
   )
 

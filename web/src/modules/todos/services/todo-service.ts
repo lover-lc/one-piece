@@ -1,5 +1,6 @@
 import { supabase } from '../../../shared/lib/supabase'
 import { isoToLocalDate } from '../../../shared/lib/datetime-utils'
+import { isTodoAssignee } from '../lib/todo-assignee'
 import type {
   RecurrenceRule,
   TodoItem,
@@ -67,7 +68,11 @@ export function toTodoList(row: DbList): TodoList {
   }
 }
 
-export function toTodoItem(row: DbItem, tags: TodoTag[] = []): TodoItem {
+export function toTodoItem(
+  row: DbItem,
+  tags: TodoTag[] = [],
+  assigneeIds: string[] = [],
+): TodoItem {
   const startAt = row.start_at ?? null
   const dueAt = row.due_at ?? null
   const isAllDay = row.is_all_day ?? true
@@ -79,6 +84,7 @@ export function toTodoItem(row: DbItem, tags: TodoTag[] = []): TodoItem {
     listId: row.list_id,
     creatorId: row.creator_id,
     assigneeId: row.assignee_id,
+    assigneeIds: assigneeIds.length > 0 ? assigneeIds : undefined,
     priority: row.priority,
     isAllDay,
     startAt,
@@ -128,14 +134,14 @@ export type TodoCheckboxAction =
 export function getTodoCheckboxAction(
   todo: Pick<
     TodoItem,
-    'status' | 'creatorId' | 'assigneeId' | 'requireFeedback' | 'awaitingMemberId'
+    'status' | 'creatorId' | 'assigneeId' | 'assigneeIds' | 'requireFeedback' | 'awaitingMemberId'
   >,
   memberId: string | null,
 ): TodoCheckboxAction {
   if (!memberId) return 'none'
 
   const isCreator = todo.creatorId === memberId
-  const isAssignee = todo.assigneeId === memberId
+  const isAssignee = isTodoAssignee(todo, memberId)
 
   if (todo.status === 'pending_review') {
     if (isAssignee) return 'remind'
@@ -207,17 +213,84 @@ export async function logStatusChange(
   })
 }
 
+export async function fetchTodoAssignees(
+  itemIds: string[],
+): Promise<Map<string, string[]>> {
+  const map = new Map<string, string[]>()
+  if (!supabase || itemIds.length === 0) return map
+
+  const { data, error } = await supabase
+    .from('todo_item_assignees')
+    .select('todo_item_id, member_id')
+    .in('todo_item_id', itemIds)
+
+  if (error) throw error
+
+  for (const row of data ?? []) {
+    const item = row as { todo_item_id: string; member_id: string }
+    const list = map.get(item.todo_item_id) ?? []
+    list.push(item.member_id)
+    map.set(item.todo_item_id, list)
+  }
+
+  return map
+}
+
+export async function syncTodoAssignees(todoItemId: string, assigneeIds: string[]) {
+  if (!supabase) return
+
+  await supabase.from('todo_item_assignees').delete().eq('todo_item_id', todoItemId)
+
+  const uniqueIds = [...new Set(assigneeIds.filter(Boolean))]
+  if (uniqueIds.length === 0) return
+
+  await supabase.from('todo_item_assignees').insert(
+    uniqueIds.map((memberId) => ({
+      todo_item_id: todoItemId,
+      member_id: memberId,
+    })),
+  )
+}
+
 export async function fetchTodoItems(memberId: string) {
   if (!supabase) return []
 
-  const { data, error } = await supabase
-    .from('todo_items')
-    .select('*')
-    .or(`creator_id.eq.${memberId},assignee_id.eq.${memberId}`)
-    .order('due_date', { ascending: true, nullsFirst: false })
+  const [primaryRes, extraLinksRes] = await Promise.all([
+    supabase
+      .from('todo_items')
+      .select('*')
+      .or(`creator_id.eq.${memberId},assignee_id.eq.${memberId}`)
+      .order('due_date', { ascending: true, nullsFirst: false }),
+    supabase
+      .from('todo_item_assignees')
+      .select('todo_item_id')
+      .eq('member_id', memberId),
+  ])
 
-  if (error) throw error
-  return (data as DbItem[]).map((row) => toTodoItem(row))
+  if (primaryRes.error) throw primaryRes.error
+  if (extraLinksRes.error) throw extraLinksRes.error
+
+  const primaryRows = (primaryRes.data ?? []) as DbItem[]
+  const primaryIds = new Set(primaryRows.map((row) => row.id))
+  const extraIds = [
+    ...new Set(
+      (extraLinksRes.data ?? [])
+        .map((row) => (row as { todo_item_id: string }).todo_item_id)
+        .filter((id) => !primaryIds.has(id)),
+    ),
+  ]
+
+  let extraRows: DbItem[] = []
+  if (extraIds.length > 0) {
+    const { data, error } = await supabase.from('todo_items').select('*').in('id', extraIds)
+    if (error) throw error
+    extraRows = (data ?? []) as DbItem[]
+  }
+
+  const rows = [...primaryRows, ...extraRows]
+  const assigneeMap = await fetchTodoAssignees(rows.map((row) => row.id))
+
+  return rows.map((row) => toTodoItem(row, [], assigneeMap.get(row.id) ?? []))
 }
 
 export async function fetchItemTags(itemIds: string[]): Promise<Map<string, TodoTag[]>> {
@@ -415,26 +488,6 @@ export async function sendProposalNotification(
     todo_item_id: todoItemId,
     message: `${editorName} 修改了待办，请确认：${title}`,
   })
-}
-
-export async function sendExecutionStartedNotifications(
-  todoItemId: string,
-  creatorId: string,
-  assigneeId: string,
-  title: string,
-) {
-  if (!supabase) return
-
-  const message = `双方已确认，开始执行：${title}`
-  const rows =
-    creatorId === assigneeId
-      ? [{ recipient_id: creatorId, type: 'agreed' as const, todo_item_id: todoItemId, message }]
-      : [
-          { recipient_id: creatorId, type: 'agreed' as const, todo_item_id: todoItemId, message },
-          { recipient_id: assigneeId, type: 'agreed' as const, todo_item_id: todoItemId, message },
-        ]
-
-  await supabase.from('todo_notifications').insert(rows)
 }
 
 export async function createReminderAt(

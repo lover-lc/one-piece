@@ -1,24 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
-import { useNotifications } from './use-notifications'
+import { usePendingActions } from '../context/pending-actions-context'
 
 export function useNotificationToast() {
-  const { data: notifications = [] } = useNotifications()
-  const unreadCount = notifications.filter((n) => !n.isRead).length
-  const prevUnreadRef = useRef<number | null>(null)
+  const { pendingItems } = usePendingActions()
+  const pendingCount = pendingItems.length
+  const prevPendingRef = useRef<number | null>(null)
   const [toast, setToast] = useState<string | null>(null)
 
   useEffect(() => {
-    if (prevUnreadRef.current === null) {
-      prevUnreadRef.current = unreadCount
+    if (prevPendingRef.current === null) {
+      prevPendingRef.current = pendingCount
       return
     }
 
-    if (unreadCount > prevUnreadRef.current) {
-      setToast('您有新通知')
+    if (pendingCount > prevPendingRef.current) {
+      setToast('有待办需要处理')
     }
 
-    prevUnreadRef.current = unreadCount
-  }, [unreadCount])
+    prevPendingRef.current = pendingCount
+  }, [pendingCount])
 
   useEffect(() => {
     if (!toast) return

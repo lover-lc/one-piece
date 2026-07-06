@@ -4,6 +4,8 @@ import { isTodoCheckboxChecked } from '../services/todo-service'
 import type { TodoItem } from '../types/todo-types'
 import { TODO_PRIORITY_LABELS } from '../types/todo-types'
 import { isReasonStatus } from '../lib/todo-status-reason'
+import { getAssignedCardRowClassName } from '../lib/todo-card-status'
+import { isAssignedTodo } from '../lib/negotiation-ui'
 import TodoStatusReasonBanner from './TodoStatusReasonBanner'
 import { Checkbox } from '@/components/ui/checkbox'
 import { getTodoDisplayTitle } from '../lib/todo-display'
@@ -35,6 +37,8 @@ export default function TodoCard({
 }: TodoCardProps) {
   const isChecked = isTodoCheckboxChecked(todo.status)
   const isPendingReview = todo.status === 'pending_review'
+  const isAssignedInProgress =
+    isAssignedTodo(todo) && todo.status === 'in_progress'
   const reasonStatus = isReasonStatus(todo.status) ? todo.status : null
   const isCompleted = todo.status === 'completed'
   const isOverdue =
@@ -43,14 +47,14 @@ export default function TodoCard({
     todo.dueDate != null &&
     todo.dueDate < new Date().toISOString().slice(0, 10)
   const canInteract = checkboxAction !== 'none'
+  const assignedRowClass =
+    isAssignedTodo(todo) ? getAssignedCardRowClassName(todo.status) : null
 
   return (
     <div
       className={cn(
         'flex items-center gap-3 px-4 py-2.5',
-        isPendingReview && 'bg-purple-50 dark:bg-purple-950/25',
-        reasonStatus && 'bg-orange-50/70 dark:bg-orange-950/20',
-        todo.status === 'rejected' && 'bg-red-50/70 dark:bg-red-950/20',
+        assignedRowClass,
       )}
     >
       <Checkbox
@@ -73,6 +77,8 @@ export default function TodoCard({
           isChecked && 'bg-primary data-[state=checked]:bg-primary',
           isPendingReview &&
             'border-purple-500 data-[state=unchecked]:border-purple-500 data-[state=unchecked]:bg-transparent',
+          isAssignedInProgress &&
+            'border-emerald-600 data-[state=unchecked]:border-emerald-600 data-[state=unchecked]:bg-transparent',
           !canInteract && 'opacity-50',
         )}
       />
@@ -87,7 +93,9 @@ export default function TodoCard({
                   ? 'text-muted-foreground line-through'
                   : isPendingReview
                     ? 'text-purple-700 dark:text-purple-300'
-                    : 'text-foreground',
+                    : isAssignedInProgress
+                      ? 'text-emerald-800 dark:text-emerald-300'
+                      : 'text-foreground',
               )}
             >
               {getTodoDisplayTitle(todo)}
@@ -119,6 +127,7 @@ export default function TodoCard({
                 'shrink-0 text-[15px]',
                 isOverdue ? 'text-destructive' : 'text-muted-foreground',
                 isPendingReview && 'text-purple-600 dark:text-purple-400',
+                isAssignedInProgress && 'text-emerald-700 dark:text-emerald-400',
               )}
             >
               {formatDueLabel(todo.dueDate, isOverdue)}

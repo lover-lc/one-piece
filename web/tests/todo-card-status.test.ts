@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getAssignedTodoCardStatusLabel } from '../src/modules/todos/lib/todo-card-status'
+import { isTodoVisibleInListForMember } from '../src/modules/todos/lib/todo-list-visibility'
 import type { TodoItem } from '../src/modules/todos/types/todo-types'
 
 const assignedTodo = (overrides: Partial<TodoItem>): TodoItem => ({
@@ -10,6 +11,9 @@ const assignedTodo = (overrides: Partial<TodoItem>): TodoItem => ({
   creatorId: 'a',
   assigneeId: 'b',
   priority: null,
+  isAllDay: true,
+  startAt: null,
+  dueAt: null,
   startDate: null,
   dueDate: null,
   requireFeedback: true,
@@ -39,7 +43,10 @@ describe('getAssignedTodoCardStatusLabel', () => {
     ).toBe('已驳回')
     expect(
       getAssignedTodoCardStatusLabel(assignedTodo({ status: 'returned' })),
-    ).toBe('待重新提交')
+    ).toBe('已驳回')
+    expect(
+      getAssignedTodoCardStatusLabel(assignedTodo({ status: 'in_progress' })),
+    ).toBe('进行中')
   })
 
   it('returns null for self-assigned or normal execution states', () => {
@@ -49,12 +56,56 @@ describe('getAssignedTodoCardStatusLabel', () => {
       ),
     ).toBeNull()
     expect(
-      getAssignedTodoCardStatusLabel(assignedTodo({ status: 'in_progress' })),
-    ).toBeNull()
-    expect(
       getAssignedTodoCardStatusLabel(
         assignedTodo({ requireFeedback: false }),
       ),
     ).toBeNull()
+  })
+})
+
+describe('isTodoVisibleInListForMember', () => {
+  it('hides negotiating assigned todos from creator until both agree', () => {
+    expect(
+      isTodoVisibleInListForMember(
+        assignedTodo({
+          status: 'pending_accept',
+          creatorAgreedAt: '2026-01-01',
+          assigneeAgreedAt: null,
+        }),
+        'a',
+      ),
+    ).toBe(false)
+  })
+
+  it('shows rejected assigned todos to creator', () => {
+    expect(
+      isTodoVisibleInListForMember(assignedTodo({ status: 'rejected' }), 'a'),
+    ).toBe(true)
+  })
+
+  it('shows in-progress assigned todos to creator after agreement', () => {
+    expect(
+      isTodoVisibleInListForMember(
+        assignedTodo({
+          status: 'in_progress',
+          creatorAgreedAt: '2026-01-01',
+          assigneeAgreedAt: '2026-01-02',
+        }),
+        'a',
+      ),
+    ).toBe(true)
+  })
+
+  it('always shows assigned todos to assignee during negotiation', () => {
+    expect(
+      isTodoVisibleInListForMember(
+        assignedTodo({
+          status: 'pending_accept',
+          creatorAgreedAt: '2026-01-01',
+          assigneeAgreedAt: null,
+        }),
+        'b',
+      ),
+    ).toBe(true)
   })
 })

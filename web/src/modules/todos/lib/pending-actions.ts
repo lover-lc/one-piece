@@ -20,7 +20,7 @@ export type PendingActionItem = {
 const ACTION_LABELS: Record<PendingActionKind, string> = {
   pending_accept: '待你确认',
   pending_review: '待你验收',
-  returned: '待你确认',
+  returned: '创建人已驳回，请修改后重新提交',
   rejected: '对方已拒绝，请修改后重新派发',
 }
 
@@ -52,7 +52,6 @@ export function getPendingActionKind(
 function isActionLockedNotificationType(type: TodoNotification['type']): boolean {
   return (
     type === 'assigned' ||
-    type === 'completed' ||
     type === 'returned' ||
     type === 'rejected' ||
     type === 'reminder' ||

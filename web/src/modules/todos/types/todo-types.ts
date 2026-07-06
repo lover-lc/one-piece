@@ -70,6 +70,7 @@ export type TodoItem = {
   listId: string
   creatorId: string
   assigneeId: string
+  assigneeIds?: string[]
   priority: TodoPriority | null
   isAllDay: boolean
   startAt: string | null
@@ -118,6 +119,7 @@ export type TodoFormInput = {
   privateListId: string
   sharedListId?: string | null
   assigneeId: string
+  assigneeIds?: string[]
   priority?: TodoPriority | null
   isAllDay?: boolean
   startAt?: string | null

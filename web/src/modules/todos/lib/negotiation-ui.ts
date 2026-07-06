@@ -1,5 +1,6 @@
 import type { TodoItem, TodoStatus } from '../types/todo-types'
 import { isAwaitingMember, isNegotiationStatus } from './negotiation'
+import { isTodoAssignee } from './todo-assignee'
 import {
   diffSnapshotFields,
   formStateToSnapshot,
@@ -58,7 +59,7 @@ export function canDeleteTodo(
   if (!memberId) return false
 
   const isCreator = todo.creatorId === memberId
-  const isAssignee = todo.assigneeId === memberId
+  const isAssignee = isTodoAssignee(todo, memberId)
 
   if (todo.status === 'completed' && isAssignedTodo(todo)) {
     return isCreator || isAssignee
@@ -88,7 +89,7 @@ export function getDetailHeaderMode(
   if (!memberId) return 'none'
 
   const isCreator = todo.creatorId === memberId
-  const isAssignee = todo.assigneeId === memberId
+  const isAssignee = isTodoAssignee(todo, memberId)
   const current = formStateToSnapshot(formState)
   const hasChanges = snapshot ? !snapshotsEqual(snapshot, current) : false
 

@@ -11,13 +11,14 @@ import {
   fetchItemTags,
   fetchTodoItems,
   fetchTodoListPlacements,
+  fetchTodoAssignees,
   getInitialStatus,
   logStatusChange,
   markTodoNotificationsRead,
-  sendExecutionStartedNotifications,
   sendProposalNotification,
   syncListSelection,
   syncSharedListPlacement,
+  syncTodoAssignees,
   toTodoItem,
   toTodoList,
   toTodoTag,
@@ -25,6 +26,7 @@ import {
   canTransition,
 } from '../services/todo-service'
 import { pickStatusReasonsForTodos } from '../lib/todo-status-reason'
+import { isTodoAssignee } from '../lib/todo-assignee'
 import {
   getNegotiationOtherParty,
 } from '../lib/negotiation'
@@ -242,7 +244,7 @@ export function useTodos(filter?: 'assigned' | 'created' | 'all') {
       let items = await fetchTodoItems(currentMemberId)
 
       if (filter === 'assigned') {
-        items = items.filter((t) => t.assigneeId === currentMemberId)
+        items = items.filter((t) => isTodoAssignee(t, currentMemberId))
       } else if (filter === 'created') {
         items = items.filter((t) => t.creatorId === currentMemberId)
       }
@@ -309,7 +311,8 @@ export function useTodo(id: string | undefined) {
 
       if (error) throw error
       const placements = await fetchTodoListPlacements([id])
-      const item = toTodoItem(data as DbItem)
+      const assigneeMap = await fetchTodoAssignees([id])
+      const item = toTodoItem(data as DbItem, [], assigneeMap.get(id) ?? [])
       const tagMap = await fetchItemTags([id])
 
       const sharedListId = placements.sharedLists.get(id)?.[0] ?? null
@@ -325,7 +328,7 @@ export function useTodo(id: string | undefined) {
       let privateListId =
         placements.memberLists.get(`${id}:${currentMemberId}`) ?? null
       const isParticipant =
-        item.creatorId === currentMemberId || item.assigneeId === currentMemberId
+        item.creatorId === currentMemberId || isTodoAssignee(item, currentMemberId)
       if (!privateListId && isParticipant && currentMemberId) {
         privateListId = await ensureMemberPrivateList(id, currentMemberId)
       }
@@ -354,6 +357,12 @@ export function useCreateTodo() {
       const status = getInitialStatus(input.requireFeedback)
       const snapshot = snapshotFromFormInput(input)
       const now = new Date().toISOString()
+      const assigneeIds = input.requireFeedback
+        ? [input.assigneeId]
+        : input.assigneeIds?.length
+          ? input.assigneeIds
+          : [input.assigneeId]
+      const primaryAssigneeId = assigneeIds[0]
 
       const listId = input.sharedListId ?? input.privateListId
       if (!listId) throw new Error('请选择清单')
@@ -363,16 +372,16 @@ export function useCreateTodo() {
         description: input.description?.trim() || null,
         list_id: listId,
         creator_id: currentMemberId,
-        assignee_id: input.assigneeId,
+        assignee_id: primaryAssigneeId,
         ...scheduleFieldsFromInput(input),
         require_feedback: input.requireFeedback,
         status,
         recurrence_rule: input.recurrenceRule ?? null,
-        awaiting_member_id: input.requireFeedback ? input.assigneeId : null,
+        awaiting_member_id: input.requireFeedback ? primaryAssigneeId : null,
         negotiation_snapshot: snapshot,
         creator_agreed_at: input.requireFeedback ? now : null,
         assignee_agreed_at:
-          input.requireFeedback && input.assigneeId === currentMemberId ? now : null,
+          input.requireFeedback && primaryAssigneeId === currentMemberId ? now : null,
       }
       if (input.priority) insert.priority = input.priority
 
@@ -383,7 +392,11 @@ export function useCreateTodo() {
         .single()
 
       if (error) throw error
-      const item = toTodoItem(data as DbItem)
+      const item = toTodoItem(data as DbItem, [], input.requireFeedback ? [] : assigneeIds)
+
+      if (!input.requireFeedback) {
+        await syncTodoAssignees(item.id, assigneeIds)
+      }
 
       if (input.sharedListId) {
         await syncListSelection(item.id, currentMemberId, input.sharedListId, 'shared')
@@ -401,7 +414,9 @@ export function useCreateTodo() {
       }
 
       if (input.customRemindAt) {
-        await createReminderAt(item.id, input.assigneeId, input.customRemindAt)
+        for (const targetId of assigneeIds) {
+          await createReminderAt(item.id, targetId, input.customRemindAt)
+        }
       } else if (
         input.dueAt &&
         input.reminderOffset &&
@@ -409,20 +424,22 @@ export function useCreateTodo() {
       ) {
         const dueDate = isoToLocalDate(input.dueAt)
         if (dueDate) {
-          await createReminder(item.id, input.assigneeId, dueDate, input.reminderOffset)
+          for (const targetId of assigneeIds) {
+            await createReminder(item.id, targetId, dueDate, input.reminderOffset)
+          }
         }
       }
 
       await logStatusChange(item.id, null, status, currentMemberId)
 
-      if (status === 'pending_accept' && input.assigneeId !== currentMemberId) {
+      if (status === 'pending_accept' && primaryAssigneeId !== currentMemberId) {
         const { data: creator } = await supabase
           .from('todo_family_members')
           .select('name')
           .eq('id', currentMemberId)
           .single()
         await supabase.from('todo_notifications').insert({
-          recipient_id: input.assigneeId,
+          recipient_id: primaryAssigneeId,
           type: 'assigned',
           todo_item_id: item.id,
           message: `${(creator as { name: string })?.name ?? '成员'} 分配了待办给你：${item.title}`,
@@ -472,6 +489,9 @@ export function useUpdateTodo() {
         patch.assignee_id = input.patch.assigneeId
         const creatorId = (existingItem as { creator_id: string }).creator_id
         patch.require_feedback = input.patch.assigneeId !== creatorId
+      }
+      if (input.patch.assigneeIds !== undefined && input.patch.requireFeedback === false) {
+        patch.assignee_id = input.patch.assigneeIds[0] ?? patch.assignee_id
       }
       if (input.patch.priority) {
         patch.priority = input.patch.priority
@@ -534,7 +554,16 @@ export function useUpdateTodo() {
         await syncListSelection(input.id, currentMemberId, input.patch.privateListId, 'private')
       }
 
-      return toTodoItem(data as DbItem)
+      if (input.patch.assigneeIds !== undefined) {
+        if (input.patch.requireFeedback === false) {
+          await syncTodoAssignees(input.id, input.patch.assigneeIds)
+        } else {
+          await syncTodoAssignees(input.id, [])
+        }
+      }
+
+      const assigneeMap = await fetchTodoAssignees([input.id])
+      return toTodoItem(data as DbItem, [], assigneeMap.get(input.id) ?? [])
     },
     onSuccess: (_data, vars) => {
       void queryClient.invalidateQueries({ queryKey: ['todos'] })
@@ -735,12 +764,6 @@ export function useNegotiationAction() {
 
       if (input.action === 'agree' && agreed) {
         await logStatusChange(input.id, input.todo.status, 'in_progress', currentMemberId)
-        await sendExecutionStartedNotifications(
-          input.id,
-          input.todo.creatorId,
-          input.todo.assigneeId,
-          snapshot.title,
-        )
       }
 
       return toTodoItem(data as DbItem)
