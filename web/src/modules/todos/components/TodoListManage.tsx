@@ -18,6 +18,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import SwipeRow from '../../../shared/components/ui/SwipeRow'
+import { useOptimisticSortableList } from '../../../shared/hooks/use-optimistic-sortable-list'
 import { cn } from '@/lib/utils'
 import { DEFAULT_TODO_LIST_COLOR } from '../lib/todo-list-colors'
 import type { TodoList } from '../types/todo-types'
@@ -119,7 +120,7 @@ function SortableListRow({
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: isDragging ? undefined : transition,
   }
 
   return (
@@ -179,6 +180,8 @@ function ListSection({
   onReorder: (orderedIds: string[]) => void
   emptyText: string
 }) {
+  const { sortedItems, applySortedItems } = useOptimisticSortableList(lists)
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -190,11 +193,13 @@ function ListSection({
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    const oldIndex = lists.findIndex((list) => list.id === active.id)
-    const newIndex = lists.findIndex((list) => list.id === over.id)
+    const oldIndex = sortedItems.findIndex((list) => list.id === active.id)
+    const newIndex = sortedItems.findIndex((list) => list.id === over.id)
     if (oldIndex < 0 || newIndex < 0) return
 
-    onReorder(arrayMove(lists.map((list) => list.id), oldIndex, newIndex))
+    const nextItems = arrayMove(sortedItems, oldIndex, newIndex)
+    applySortedItems(nextItems)
+    onReorder(nextItems.map((list) => list.id))
   }
 
   return (
@@ -211,7 +216,7 @@ function ListSection({
         </button>
       </div>
 
-      {lists.length === 0 ? (
+      {sortedItems.length === 0 ? (
         <p className="py-6 text-center text-sm text-text-secondary">{emptyText}</p>
       ) : (
         <DndContext
@@ -220,11 +225,11 @@ function ListSection({
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={lists.map((list) => list.id)}
+            items={sortedItems.map((list) => list.id)}
             strategy={verticalListSortingStrategy}
           >
             <ul className="mt-3 space-y-2">
-              {lists.map((list) => (
+              {sortedItems.map((list) => (
                 <SortableListRow
                   key={list.id}
                   list={list}

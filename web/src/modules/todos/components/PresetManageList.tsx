@@ -17,6 +17,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import { GripVertical } from 'lucide-react'
 import SwipeRow from '../../../shared/components/ui/SwipeRow'
+import { useOptimisticSortableList } from '../../../shared/hooks/use-optimistic-sortable-list'
 import { cn } from '@/lib/utils'
 
 export type PresetManageItem = {
@@ -51,7 +52,7 @@ function SortablePresetRow({
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: isDragging ? undefined : transition,
   }
 
   return (
@@ -112,6 +113,8 @@ export default function PresetManageList({
   onEdit,
   onDelete,
 }: PresetManageListProps) {
+  const { sortedItems, applySortedItems } = useOptimisticSortableList(items)
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
@@ -121,18 +124,20 @@ export default function PresetManageList({
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    const oldIndex = items.findIndex((item) => item.id === active.id)
-    const newIndex = items.findIndex((item) => item.id === over.id)
+    const oldIndex = sortedItems.findIndex((item) => item.id === active.id)
+    const newIndex = sortedItems.findIndex((item) => item.id === over.id)
     if (oldIndex < 0 || newIndex < 0) return
 
-    onReorder(arrayMove(items.map((i) => i.id), oldIndex, newIndex))
+    const nextItems = arrayMove(sortedItems, oldIndex, newIndex)
+    applySortedItems(nextItems)
+    onReorder(nextItems.map((item) => item.id))
   }
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-      <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+      <SortableContext items={sortedItems.map((i) => i.id)} strategy={verticalListSortingStrategy}>
         <ul className="space-y-2">
-          {items.map((item) => (
+          {sortedItems.map((item) => (
             <SortablePresetRow
               key={item.id}
               item={item}

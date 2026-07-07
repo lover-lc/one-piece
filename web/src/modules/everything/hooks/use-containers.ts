@@ -3,6 +3,7 @@ import {
   nextContainerSortOrder,
   persistContainerSortOrder,
 } from '../../../shared/lib/container-sort-order'
+import { createGroupedReorderMutationHandlers } from '../../../shared/lib/reorder-mutation'
 import { supabase } from '../../../shared/lib/supabase'
 import {
   toContainer,
@@ -162,6 +163,11 @@ export function useUpdateContainer() {
 
 export function useReorderContainers() {
   const queryClient = useQueryClient()
+  const handlers = createGroupedReorderMutationHandlers<Container>(
+    queryClient,
+    ['containers'],
+    (item, input) => item.areaId === input.areaId,
+  )
 
   return useMutation({
     mutationFn: async (input: { areaId: string; orderedIds: string[] }) => {
@@ -172,9 +178,7 @@ export function useReorderContainers() {
         input.orderedIds,
       )
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['containers'] })
-    },
+    ...handlers,
   })
 }
 

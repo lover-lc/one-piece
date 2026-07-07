@@ -19,6 +19,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { GripVertical, Pencil, Plus } from 'lucide-react'
 import { useState } from 'react'
 import SwipeRow from '../../../shared/components/ui/SwipeRow'
+import { useOptimisticSortableList } from '../../../shared/hooks/use-optimistic-sortable-list'
 import { cn } from '@/lib/utils'
 import { SYSTEM_RESERVED_NAME } from '../lib/seed-defaults'
 
@@ -133,7 +134,7 @@ function SortableManageRow({
 
   const style = {
     transform: CSS.Transform.toString(transform),
-    transition,
+    transition: isDragging ? undefined : transition,
   }
 
   function handleContentClick() {
@@ -270,6 +271,8 @@ export default function ManageList({
   const [showSystemDeleteAlert, setShowSystemDeleteAlert] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const { sortedItems, applySortedItems } = useOptimisticSortableList(entities)
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(KeyboardSensor, {
@@ -289,11 +292,13 @@ export default function ManageList({
     const { active, over } = event
     if (!over || active.id === over.id) return
 
-    const oldIndex = entities.findIndex((entity) => entity.id === active.id)
-    const newIndex = entities.findIndex((entity) => entity.id === over.id)
+    const oldIndex = sortedItems.findIndex((entity) => entity.id === active.id)
+    const newIndex = sortedItems.findIndex((entity) => entity.id === over.id)
     if (oldIndex < 0 || newIndex < 0) return
 
-    onReorder(arrayMove(entities.map((entity) => entity.id), oldIndex, newIndex))
+    const nextItems = arrayMove(sortedItems, oldIndex, newIndex)
+    applySortedItems(nextItems)
+    onReorder(nextItems.map((entity) => entity.id))
   }
 
   async function handleAdd(name: string) {
@@ -334,7 +339,7 @@ export default function ManageList({
 
       {isLoading ? (
         <p className="py-8 text-center text-sm text-text-secondary">加载中…</p>
-      ) : entities.length === 0 ? (
+      ) : sortedItems.length === 0 ? (
         <p className="py-8 text-center text-sm text-text-secondary">
           暂无{typeLabel}
         </p>
@@ -345,7 +350,7 @@ export default function ManageList({
           onDragEnd={handleDragEnd}
         >
           <SortableContext
-            items={entities.map((entity) => entity.id)}
+            items={sortedItems.map((entity) => entity.id)}
             strategy={isGrid ? rectSortingStrategy : verticalListSortingStrategy}
           >
             <ul
@@ -354,7 +359,7 @@ export default function ManageList({
                 isGrid ? 'grid grid-cols-2 gap-2' : 'space-y-2',
               )}
             >
-              {entities.map((entity) => {
+              {sortedItems.map((entity) => {
                 const isSystem = entity.isSystemReserved
 
                 return (

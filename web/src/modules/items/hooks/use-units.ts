@@ -3,6 +3,7 @@ import {
   nextEntitySortOrder,
   persistEntitySortOrder,
 } from '../../../shared/lib/entity-sort-order'
+import { createReorderMutationHandlers } from '../../../shared/lib/reorder-mutation'
 import { supabase } from '../../../shared/lib/supabase'
 import { toUnit, type DbUnit, type Unit } from '../lib/types'
 
@@ -91,15 +92,14 @@ export function useUpdateUnit() {
 
 export function useReorderUnits() {
   const queryClient = useQueryClient()
+  const handlers = createReorderMutationHandlers<Unit>(queryClient, ['units'])
 
   return useMutation({
     mutationFn: async (orderedIds: string[]) => {
       if (!supabase) throw new Error('未配置 Supabase')
       await persistEntitySortOrder(supabase, 'units', orderedIds)
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['units'] })
-    },
+    ...handlers,
   })
 }
 

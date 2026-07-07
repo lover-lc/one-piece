@@ -3,6 +3,7 @@ import {
   nextEntitySortOrder,
   persistEntitySortOrder,
 } from '../../../shared/lib/entity-sort-order'
+import { createReorderMutationHandlers } from '../../../shared/lib/reorder-mutation'
 import { supabase } from '../../../shared/lib/supabase'
 import { toArea, type Area, type DbArea } from '../lib/types'
 
@@ -83,15 +84,14 @@ export function useUpdateArea() {
 
 export function useReorderAreas() {
   const queryClient = useQueryClient()
+  const handlers = createReorderMutationHandlers<Area>(queryClient, ['areas'])
 
   return useMutation({
     mutationFn: async (orderedIds: string[]) => {
       if (!supabase) throw new Error('未配置 Supabase')
       await persistEntitySortOrder(supabase, 'areas', orderedIds)
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['areas'] })
-    },
+    ...handlers,
   })
 }
 

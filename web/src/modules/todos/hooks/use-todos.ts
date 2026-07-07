@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tansta
 import { useAuth } from '../../../shared/hooks/use-auth'
 import { useCurrentMember } from '../../../shared/hooks/use-current-member'
 import { persistEntitySortOrder } from '../../../shared/lib/entity-sort-order'
+import { createGroupedReorderMutationHandlers } from '../../../shared/lib/reorder-mutation'
 import { supabase } from '../../../shared/lib/supabase'
 import { isoToLocalDate } from '../../../shared/lib/datetime-utils'
 import {
@@ -36,6 +37,7 @@ import type {
   RecurrenceRule,
   TodoFormInput,
   TodoItem,
+  TodoList,
   TodoPriority,
   TodoStatus,
 } from '../types/todo-types'
@@ -187,6 +189,11 @@ export function useUpdateTodoList() {
 
 export function useReorderTodoLists() {
   const queryClient = useQueryClient()
+  const handlers = createGroupedReorderMutationHandlers<TodoList>(
+    queryClient,
+    ['todo-lists'],
+    (item, input) => item.visibility === input.visibility,
+  )
 
   return useMutation({
     mutationFn: async (input: {
@@ -196,9 +203,7 @@ export function useReorderTodoLists() {
       if (!supabase) throw new Error('未配置 Supabase')
       await persistEntitySortOrder(supabase, 'todo_lists', input.orderedIds)
     },
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['todo-lists'] })
-    },
+    ...handlers,
   })
 }
 
