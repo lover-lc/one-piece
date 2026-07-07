@@ -13,7 +13,8 @@ import AppSegmentedControl from '../../../../shared/components/motion/AppSegment
 import { toISODate } from '../../../../shared/lib/date-utils'
 import { composeLocalIso } from '../../../../shared/lib/datetime-utils'
 import { cn } from '@/lib/utils'
-import CheckinMotionBottomSheet from '../motion/CheckinMotionBottomSheet'
+import type { CheckinRecord } from '../../types/checkin-types'
+import { waterRecordToFields } from '../../lib/record-form-init'
 
 type WaterRecordFormValue = {
   name: string
@@ -22,10 +23,12 @@ type WaterRecordFormValue = {
 }
 
 type WaterRecordFormProps = {
-  open: boolean
-  onClose: () => void
+  formId?: string
   defaultRecordedAt?: Date
+  editingRecord?: CheckinRecord | null
+  showSubmitButton?: boolean
   onSubmit: (value: WaterRecordFormValue) => Promise<void> | void
+  onSuccess?: () => void
 }
 
 const DRINK_PRESETS: { id: string; name: string; ml: number }[] = [
@@ -34,6 +37,8 @@ const DRINK_PRESETS: { id: string; name: string; ml: number }[] = [
   { id: 'large', name: '大杯', ml: 750 },
 ]
 
+const SOURCE_PANEL_MIN_H = 'min-h-[120px]'
+
 function dateFieldFromDate(d: Date): DateFieldValue {
   const dateStr = toISODate(d)
   const time = format(d, 'HH:mm')
@@ -41,10 +46,12 @@ function dateFieldFromDate(d: Date): DateFieldValue {
 }
 
 export default function WaterRecordForm({
-  open,
-  onClose,
+  formId = 'water-record-form',
   defaultRecordedAt,
+  editingRecord,
+  showSubmitButton = true,
   onSubmit,
+  onSuccess,
 }: WaterRecordFormProps) {
   const [mode, setMode] = useState<'preset' | 'custom'>('preset')
   const [presetId, setPresetId] = useState<string>('cup')
@@ -59,17 +66,27 @@ export default function WaterRecordForm({
   const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
-    if (!open) return
+    setError(null)
+    setSubmitting(false)
+    setPresetSheetOpen(false)
+
+    if (editingRecord) {
+      const fields = waterRecordToFields(editingRecord, DRINK_PRESETS)
+      setRecordedAtField(dateFieldFromDate(new Date(editingRecord.recordedAt)))
+      setMode(fields.mode)
+      setPresetId(fields.presetId)
+      setCustomName(fields.customName)
+      setCustomMl(fields.customMl)
+      return
+    }
+
     const d = defaultRecordedAt ?? new Date()
     setRecordedAtField(dateFieldFromDate(d))
     setMode('preset')
     setPresetId('cup')
-    setPresetSheetOpen(false)
     setCustomName('水')
     setCustomMl('300')
-    setError(null)
-    setSubmitting(false)
-  }, [open, defaultRecordedAt])
+  }, [defaultRecordedAt, editingRecord])
 
   const preset = useMemo(
     () => DRINK_PRESETS.find((p) => p.id === presetId) ?? DRINK_PRESETS[0],
@@ -107,7 +124,7 @@ export default function WaterRecordForm({
         ml: mlValue,
         recordedAt,
       })
-      onClose()
+      onSuccess?.()
     } catch (err) {
       setError(String((err as Error).message || '提交失败'))
     } finally {
@@ -117,21 +134,28 @@ export default function WaterRecordForm({
 
   return (
     <>
-      <CheckinMotionBottomSheet open={open} onClose={onClose} title="喝水">
-        <div className="space-y-3 p-4">
-          <AppSegmentedControl
-            aria-label="饮水来源"
-            className="rounded-md bg-muted/60"
-            size="xs"
-            layoutIdPrefix="water-source"
-            options={[
-              { value: 'preset' as const, label: '常用' },
-              { value: 'custom' as const, label: '自定义' },
-            ]}
-            value={mode}
-            onChange={setMode}
-          />
+      <form
+        id={formId}
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void handleSubmit()
+        }}
+      >
+        <AppSegmentedControl
+          aria-label="饮水来源"
+          className="rounded-md bg-muted/60"
+          size="xs"
+          layoutIdPrefix="water-source"
+          options={[
+            { value: 'preset' as const, label: '常用' },
+            { value: 'custom' as const, label: '自定义' },
+          ]}
+          value={mode}
+          onChange={setMode}
+        />
 
+        <div className={SOURCE_PANEL_MIN_H}>
           {mode === 'preset' ? (
             <div>
               <Label>选择预设</Label>
@@ -169,25 +193,27 @@ export default function WaterRecordForm({
               </div>
             </div>
           )}
-
-          <div>
-            <Label className="mb-1 block">记录时间</Label>
-            <DateField
-              value={recordedAtField}
-              onChange={setRecordedAtField}
-              showTime
-              allowClear={false}
-              placeholder="选择时间"
-            />
-          </div>
-
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-          <Button type="button" className="w-full" onClick={() => void handleSubmit()} disabled={submitting}>
-            {submitting ? '提交中…' : '保存记录'}
-          </Button>
         </div>
-      </CheckinMotionBottomSheet>
+
+        <div>
+          <Label className="mb-1 block">记录时间</Label>
+          <DateField
+            value={recordedAtField}
+            onChange={setRecordedAtField}
+            showTime
+            allowClear={false}
+            placeholder="选择时间"
+          />
+        </div>
+
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+        {showSubmitButton ? (
+          <Button type="submit" className="w-full" disabled={submitting}>
+            {submitting ? '提交中…' : editingRecord ? '保存修改' : '保存记录'}
+          </Button>
+        ) : null}
+      </form>
 
       <AppMotionBottomSheet
         open={presetSheetOpen}

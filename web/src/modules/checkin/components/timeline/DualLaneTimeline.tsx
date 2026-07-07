@@ -17,6 +17,8 @@ type DualLaneTimelineProps = {
   memberA: FamilyMember
   memberB: FamilyMember
   dietOverLimitByRecordId?: Map<string, boolean>
+  onViewRecord?: (record: CheckinRecord) => void
+  onDeleteRecord?: (record: CheckinRecord) => void
 }
 
 function SpineLine() {
@@ -34,12 +36,16 @@ function LaneColumn({
   memberColor,
   align,
   dietOverLimitByRecordId,
+  onViewRecord,
+  onDeleteRecord,
 }: {
   records: CheckinRecord[]
   recordType: CheckinRecordType
   memberColor: string
   align: 'left' | 'right'
   dietOverLimitByRecordId?: Map<string, boolean>
+  onViewRecord?: (record: CheckinRecord) => void
+  onDeleteRecord?: (record: CheckinRecord) => void
 }) {
   return (
     <div
@@ -56,6 +62,8 @@ function LaneColumn({
             recordType={recordType}
             memberColor={memberColor}
             isOverLimit={dietOverLimitByRecordId?.get(record.id) ?? false}
+            onView={onViewRecord}
+            onDelete={onDeleteRecord}
           />
         ))}
       </AnimatePresence>
@@ -69,12 +77,16 @@ function TimelineSlotRow({
   memberA,
   memberB,
   dietOverLimitByRecordId,
+  onViewRecord,
+  onDeleteRecord,
 }: {
   slot: TimelineSlot
   recordType: CheckinRecordType
   memberA: FamilyMember
   memberB: FamilyMember
   dietOverLimitByRecordId?: Map<string, boolean>
+  onViewRecord?: (record: CheckinRecord) => void
+  onDeleteRecord?: (record: CheckinRecord) => void
 }) {
   return (
     <div className="relative flex min-h-10">
@@ -84,6 +96,8 @@ function TimelineSlotRow({
         memberColor={memberA.color}
         align="left"
         dietOverLimitByRecordId={dietOverLimitByRecordId}
+        onViewRecord={onViewRecord}
+        onDeleteRecord={onDeleteRecord}
       />
 
       <div className="relative shrink-0" style={{ width: OVERVIEW_SPINE_WIDTH }}>
@@ -102,6 +116,8 @@ function TimelineSlotRow({
         memberColor={memberB.color}
         align="right"
         dietOverLimitByRecordId={dietOverLimitByRecordId}
+        onViewRecord={onViewRecord}
+        onDeleteRecord={onDeleteRecord}
       />
     </div>
   )
@@ -113,6 +129,8 @@ export default function DualLaneTimeline({
   memberA,
   memberB,
   dietOverLimitByRecordId,
+  onViewRecord,
+  onDeleteRecord,
 }: DualLaneTimelineProps) {
   if (slots.length === 0) {
     return (
@@ -141,6 +159,8 @@ export default function DualLaneTimeline({
             memberA={memberA}
             memberB={memberB}
             dietOverLimitByRecordId={dietOverLimitByRecordId}
+            onViewRecord={onViewRecord}
+            onDeleteRecord={onDeleteRecord}
           />
         ))}
       </div>

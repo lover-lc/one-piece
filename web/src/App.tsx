@@ -32,6 +32,8 @@ import CheckinTabLayout from './modules/checkin/components/layout/CheckinTabLayo
 import CheckinPage from './modules/checkin/pages/CheckinPage'
 import CheckinOverviewPage from './modules/checkin/pages/CheckinOverviewPage'
 import CheckinProfilePage from './modules/checkin/pages/CheckinProfilePage'
+import CheckinRecordDetailPage from './modules/checkin/pages/CheckinRecordDetailPage'
+import CheckinRecordFormPage from './modules/checkin/pages/CheckinRecordFormPage'
 
 const queryClient = new QueryClient()
 
@@ -89,6 +91,9 @@ function AppRoutes() {
             </Route>
 
             <Route path="/checkin" element={<CheckinModuleLayout />}>
+              <Route path="records/new" element={<CheckinRecordFormPage />} />
+              <Route path="records/:id/edit" element={<CheckinRecordFormPage />} />
+              <Route path="records/:id" element={<CheckinRecordDetailPage />} />
               <Route element={<CheckinTabLayout />}>
                 <Route index element={<CheckinPage type="diet" />} />
                 <Route path="exercise" element={<CheckinPage type="exercise" />} />

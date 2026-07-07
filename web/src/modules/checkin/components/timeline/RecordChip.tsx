@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import type { CheckinRecord, CheckinRecordType, DietPayload, ExercisePayload, WaterPayload } from '../../types/checkin-types'
+import SwipeRow from '../../../../shared/components/ui/SwipeRow'
 import { useCheckinMotion } from '../../hooks/use-checkin-motion'
 
 type RecordChipProps = {
@@ -8,6 +9,8 @@ type RecordChipProps = {
   recordType: CheckinRecordType
   memberColor: string
   isOverLimit?: boolean
+  onView?: (record: CheckinRecord) => void
+  onDelete?: (record: CheckinRecord) => void
 }
 
 function chipLabel(record: CheckinRecord, recordType: CheckinRecordType): string {
@@ -28,10 +31,12 @@ export default function RecordChip({
   recordType,
   memberColor,
   isOverLimit = false,
+  onView,
+  onDelete,
 }: RecordChipProps) {
   const { spring, chipEnterY, reducedMotion } = useCheckinMotion()
 
-  return (
+  const chip = (
     <motion.div
       layout
       initial={
@@ -43,13 +48,41 @@ export default function RecordChip({
       exit={{ opacity: 0, scale: 0.96 }}
       transition={spring}
       className={cn(
-        'rounded-md border bg-card/90 px-2 py-1 text-xs leading-tight shadow-sm',
+        'max-w-full rounded-md border bg-card/90 px-2 py-1 text-xs leading-tight shadow-sm',
         isOverLimit ? 'border-[var(--checkin-over-limit)]' : 'border-border/60',
+        onView && 'cursor-pointer',
       )}
       style={{ borderLeftWidth: 3, borderLeftColor: isOverLimit ? 'var(--checkin-over-limit)' : memberColor }}
-      title={chipLabel(record, recordType)}
+      title={onView ? `${chipLabel(record, recordType)} · 点击查看` : chipLabel(record, recordType)}
     >
       <p className="truncate font-medium text-foreground">{chipLabel(record, recordType)}</p>
     </motion.div>
+  )
+
+  if (!onView) return chip
+
+  if (onDelete) {
+    return (
+      <div className="max-w-full">
+        <SwipeRow
+          onContentClick={() => onView(record)}
+          onDelete={() => onDelete(record)}
+        >
+          {chip}
+        </SwipeRow>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-full">
+      <button
+        type="button"
+        className="block w-full text-left"
+        onClick={() => onView(record)}
+      >
+        {chip}
+      </button>
+    </div>
   )
 }

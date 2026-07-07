@@ -14,13 +14,18 @@ import { toISODate } from '../../../../shared/lib/date-utils'
 import { composeLocalIso } from '../../../../shared/lib/datetime-utils'
 import { cn } from '@/lib/utils'
 import CheckinToast from '../CheckinToast'
-import CheckinMotionBottomSheet from '../motion/CheckinMotionBottomSheet'
 import {
   useFoodLibrary,
   useFoodPresets,
   useUpsertFoodPreset,
 } from '../../hooks/use-food-library'
-import type { FoodLibraryItem, FoodPreset } from '../../types/checkin-types'
+import {
+  convertEnergyInput,
+  parseEnergyInput,
+  type EnergyUnit,
+} from '../../lib/energy-units'
+import type { CheckinRecord, FoodLibraryItem, FoodPreset } from '../../types/checkin-types'
+import { dietRecordToCustomFields } from '../../lib/record-form-init'
 
 type NutritionPer100g = {
   kcalPer100g: number
@@ -44,11 +49,13 @@ type DietRecordFormValue = {
 }
 
 type DietRecordFormProps = {
-  open: boolean
-  onClose: () => void
+  formId?: string
   memberId: string | null
   defaultRecordedAt?: Date
+  editingRecord?: CheckinRecord | null
+  showSubmitButton?: boolean
   onSubmit: (value: DietRecordFormValue) => Promise<void> | void
+  onSuccess?: () => void
 }
 
 const MEAL_OPTIONS = [
@@ -134,12 +141,16 @@ function SelectableList({
   )
 }
 
+const SOURCE_PANEL_MIN_H = 'min-h-[220px]'
+
 export default function DietRecordForm({
-  open,
-  onClose,
+  formId = 'diet-record-form',
   memberId,
   defaultRecordedAt,
+  editingRecord,
+  showSubmitButton = true,
   onSubmit,
+  onSuccess,
 }: DietRecordFormProps) {
   const [librarySearch, setLibrarySearch] = useState('')
   const [presetSearch, setPresetSearch] = useState('')
@@ -152,7 +163,8 @@ export default function DietRecordForm({
   const [selectedLibraryId, setSelectedLibraryId] = useState<string>('')
 
   const [customName, setCustomName] = useState('')
-  const [customKcal, setCustomKcal] = useState<string>('')
+  const [customEnergy, setCustomEnergy] = useState<string>('')
+  const [energyUnit, setEnergyUnit] = useState<EnergyUnit>('kcal')
   const [customProtein, setCustomProtein] = useState<string>('')
   const [customFat, setCustomFat] = useState<string>('')
   const [customCarbs, setCustomCarbs] = useState<string>('')
@@ -171,26 +183,46 @@ export default function DietRecordForm({
   const dismissToast = useCallback(() => setToast(null), [])
 
   useEffect(() => {
-    if (!open) return
-    const d = defaultRecordedAt ?? new Date()
-    setRecordedAtField(dateFieldFromDate(d))
     setError(null)
     setSubmitting(false)
     setToast(null)
+    setMealSheetOpen(false)
+
+    if (editingRecord) {
+      const fields = dietRecordToCustomFields(editingRecord)
+      setRecordedAtField(dateFieldFromDate(new Date(editingRecord.recordedAt)))
+      setLibrarySearch('')
+      setPresetSearch('')
+      setSource('custom')
+      setSelectedPresetId('')
+      setSelectedLibraryId('')
+      setCustomName(fields.customName)
+      setCustomEnergy(fields.customEnergy)
+      setEnergyUnit('kcal')
+      setCustomProtein(fields.customProtein)
+      setCustomFat(fields.customFat)
+      setCustomCarbs(fields.customCarbs)
+      setGrams(fields.grams)
+      setMealType(fields.mealType)
+      return
+    }
+
+    const d = defaultRecordedAt ?? new Date()
+    setRecordedAtField(dateFieldFromDate(d))
     setLibrarySearch('')
     setPresetSearch('')
     setSource('preset')
     setSelectedPresetId('')
     setSelectedLibraryId('')
     setCustomName('')
-    setCustomKcal('')
+    setCustomEnergy('')
+    setEnergyUnit('kcal')
     setCustomProtein('')
     setCustomFat('')
     setCustomCarbs('')
     setGrams('100')
     setMealType('')
-    setMealSheetOpen(false)
-  }, [open, defaultRecordedAt])
+  }, [defaultRecordedAt, editingRecord])
 
   const filteredPresets = useMemo(() => {
     const q = presetSearch.trim().toLowerCase()
@@ -210,11 +242,11 @@ export default function DietRecordForm({
   const per100g = useMemo(() => {
     if (source === 'preset') return selectedPreset ? per100gFromFood(selectedPreset) : null
     if (source === 'library') return selectedLibrary ? per100gFromFood(selectedLibrary) : null
-    const kcal = Number(customKcal || NaN)
+    const kcal = parseEnergyInput(customEnergy, energyUnit)
     const protein = Number(customProtein || NaN)
     const fat = Number(customFat || NaN)
     const carbs = Number(customCarbs || NaN)
-    if (![kcal, protein, fat, carbs].every((n) => Number.isFinite(n))) return null
+    if (kcal == null || ![protein, fat, carbs].every((n) => Number.isFinite(n))) return null
     return {
       kcalPer100g: kcal,
       proteinGPer100g: protein,
@@ -225,7 +257,8 @@ export default function DietRecordForm({
     source,
     selectedPreset,
     selectedLibrary,
-    customKcal,
+    customEnergy,
+    energyUnit,
     customProtein,
     customFat,
     customCarbs,
@@ -267,11 +300,11 @@ export default function DietRecordForm({
       setError('请填写食物名称')
       return
     }
-    const kcal = Number(customKcal || NaN)
+    const kcal = parseEnergyInput(customEnergy, energyUnit)
     const protein = Number(customProtein || NaN)
     const fat = Number(customFat || NaN)
     const carbs = Number(customCarbs || NaN)
-    if (![kcal, protein, fat, carbs].every((n) => Number.isFinite(n))) {
+    if (kcal == null || ![protein, fat, carbs].every((n) => Number.isFinite(n))) {
       setError('请补全每 100g 的营养信息')
       return
     }
@@ -334,7 +367,7 @@ export default function DietRecordForm({
         recordedAt,
         nutrition,
       })
-      onClose()
+      onSuccess?.()
     } catch (err) {
       setError(String((err as Error).message || '提交失败'))
     } finally {
@@ -344,22 +377,29 @@ export default function DietRecordForm({
 
   return (
     <>
-      <CheckinMotionBottomSheet open={open} onClose={onClose} title="饮食">
-        <div className="space-y-3 p-4">
-          <AppSegmentedControl
-            aria-label="食物来源"
-            className="rounded-md bg-muted/60"
-            size="xs"
-            layoutIdPrefix="diet-source"
-            options={[
-              { value: 'preset' as const, label: '预设' },
-              { value: 'library' as const, label: '搜索' },
-              { value: 'custom' as const, label: '自定义' },
-            ]}
-            value={source}
-            onChange={setSource}
-          />
+      <form
+        id={formId}
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void handleSubmit()
+        }}
+      >
+        <AppSegmentedControl
+          aria-label="食物来源"
+          className="rounded-md bg-muted/60"
+          size="xs"
+          layoutIdPrefix="diet-source"
+          options={[
+            { value: 'preset' as const, label: '预设' },
+            { value: 'library' as const, label: '搜索' },
+            { value: 'custom' as const, label: '自定义' },
+          ]}
+          value={source}
+          onChange={setSource}
+        />
 
+        <div className={SOURCE_PANEL_MIN_H}>
           {source === 'preset' ? (
             <div className="space-y-2">
               <Input
@@ -425,14 +465,30 @@ export default function DietRecordForm({
               <p className="text-xs font-medium text-muted-foreground">每 100g</p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label htmlFor="customKcal">热量（kcal）</Label>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <Label htmlFor="customEnergy">热量</Label>
+                    <AppSegmentedControl
+                      aria-label="热量单位"
+                      className="h-7 shrink-0 rounded-md bg-muted/60"
+                      size="xs"
+                      layoutIdPrefix="diet-energy-unit"
+                      options={[
+                        { value: 'kcal' as const, label: '千卡' },
+                        { value: 'kj' as const, label: '千焦' },
+                      ]}
+                      value={energyUnit}
+                      onChange={(next) => {
+                        setCustomEnergy((prev) => convertEnergyInput(prev, energyUnit, next))
+                        setEnergyUnit(next)
+                      }}
+                    />
+                  </div>
                   <Input
-                    id="customKcal"
-                    className="mt-1"
+                    id="customEnergy"
                     inputMode="decimal"
-                    value={customKcal}
-                    onChange={(e) => setCustomKcal(e.target.value)}
-                    placeholder="120"
+                    value={customEnergy}
+                    onChange={(e) => setCustomEnergy(e.target.value)}
+                    placeholder={energyUnit === 'kcal' ? '120' : '502'}
                   />
                 </div>
                 <div>
@@ -480,71 +536,68 @@ export default function DietRecordForm({
               </Button>
             </div>
           ) : null}
+        </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <Label htmlFor="grams">克数（g）</Label>
-              <Input
-                id="grams"
-                className="mt-1"
-                inputMode="decimal"
-                value={grams}
-                onChange={(e) => setGrams(e.target.value)}
-                placeholder="150"
-              />
-            </div>
-            <div>
-              <Label>餐次（可选）</Label>
-              <button
-                type="button"
-                onClick={() => setMealSheetOpen(true)}
-                className="mt-1 flex w-full min-w-0 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm"
-              >
-                <span className={mealType ? 'text-foreground' : 'text-muted-foreground'}>
-                  {mealLabel}
-                </span>
-                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-              </button>
-            </div>
-          </div>
-
+        <div className="grid grid-cols-2 gap-3">
           <div>
-            <Label className="mb-1 block">记录时间</Label>
-            <DateField
-              value={recordedAtField}
-              onChange={setRecordedAtField}
-              showTime
-              allowClear={false}
-              placeholder="选择时间"
+            <Label htmlFor="grams">克数（g）</Label>
+            <Input
+              id="grams"
+              className="mt-1"
+              inputMode="decimal"
+              value={grams}
+              onChange={(e) => setGrams(e.target.value)}
+              placeholder="150"
             />
           </div>
-
-          <div className="rounded-md border border-border bg-card/50 p-3 text-sm">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">热量</span>
-              <span className="font-medium">
-                {nutrition ? `${nutrition.calories} kcal` : '—'}
+          <div>
+            <Label>餐次（可选）</Label>
+            <button
+              type="button"
+              onClick={() => setMealSheetOpen(true)}
+              className="mt-1 flex w-full min-w-0 items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-left text-sm"
+            >
+              <span className={mealType ? 'text-foreground' : 'text-muted-foreground'}>
+                {mealLabel}
               </span>
-            </div>
-            <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
-              <span>蛋白质：{nutrition ? `${nutrition.protein}g` : '—'}</span>
-              <span>脂肪：{nutrition ? `${nutrition.fat}g` : '—'}</span>
-              <span>碳水：{nutrition ? `${nutrition.carbs}g` : '—'}</span>
-            </div>
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            </button>
           </div>
-
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-
-          <Button
-            type="button"
-            className="w-full"
-            onClick={() => void handleSubmit()}
-            disabled={submitting}
-          >
-            {submitting ? '提交中…' : '保存记录'}
-          </Button>
         </div>
-      </CheckinMotionBottomSheet>
+
+        <div>
+          <Label className="mb-1 block">记录时间</Label>
+          <DateField
+            value={recordedAtField}
+            onChange={setRecordedAtField}
+            showTime
+            allowClear={false}
+            placeholder="选择时间"
+          />
+        </div>
+
+        <div className="rounded-md border border-border bg-card/50 p-3 text-sm">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">总览</span>
+            <span className="font-medium">
+              {nutrition ? `${nutrition.calories} kcal` : '—'}
+            </span>
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-2 text-xs text-muted-foreground">
+            <span>蛋白质：{nutrition ? `${nutrition.protein}g` : '—'}</span>
+            <span>脂肪：{nutrition ? `${nutrition.fat}g` : '—'}</span>
+            <span>碳水：{nutrition ? `${nutrition.carbs}g` : '—'}</span>
+          </div>
+        </div>
+
+        {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+        {showSubmitButton ? (
+          <Button type="submit" className="w-full" disabled={submitting}>
+            {submitting ? '提交中…' : editingRecord ? '保存修改' : '保存记录'}
+          </Button>
+        ) : null}
+      </form>
 
       <AppMotionBottomSheet
         open={mealSheetOpen}

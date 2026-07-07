@@ -90,6 +90,28 @@ export function useCheckinRecords(filters: {
   })
 }
 
+export function useCheckinRecord(id: string | undefined) {
+  const { session } = useAuth()
+
+  return useQuery({
+    queryKey: ['checkin-record', session?.user.id, id],
+    enabled: Boolean(session?.user.id && supabase && id),
+    queryFn: async () => {
+      if (!supabase || !session?.user.id || !id) return null
+
+      const { data, error } = await supabase
+        .from('checkin_records')
+        .select('*')
+        .eq('id', id)
+        .eq('user_id', session.user.id)
+        .single()
+
+      if (error) throw error
+      return toRecord(data as DbRecord)
+    },
+  })
+}
+
 export function useCheckinRecordsForDate(slotDate: string) {
   const { session } = useAuth()
 

@@ -1,23 +1,19 @@
 import { Plus } from 'lucide-react'
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Input } from '@/components/ui/input'
-import { useCurrentMember } from '@/shared/hooks/use-current-member'
 import { useFamilyMembers } from '@/shared/hooks/use-family-members'
 import { cn } from '@/lib/utils'
-import { getShanghaiDateString } from '../lib/checkin-dates'
+import { getShanghaiDateString, isRecordEditable } from '../lib/checkin-dates'
+import { checkinRecordDetailPath, checkinRecordNewPath } from '../lib/checkin-record-routes'
 import { buildHalfHourLanes } from '../lib/timeline-slots'
 import { useCheckinProfiles } from '../hooks/use-checkin-profiles'
-import { useCheckinRecords, useCreateCheckinRecord } from '../hooks/use-checkin-records'
+import { useCheckinRecords, useDeleteCheckinRecord } from '../hooks/use-checkin-records'
 import type {
   CheckinRecord,
   CheckinRecordType,
   DietPayload,
-  ExercisePayload,
-  WaterPayload,
 } from '../types/checkin-types'
-import DietRecordForm from '../components/records/DietRecordForm'
-import ExerciseRecordForm from '../components/records/ExerciseRecordForm'
-import WaterRecordForm from '../components/records/WaterRecordForm'
 import DualLaneTimeline from '../components/timeline/DualLaneTimeline'
 import CheckinPressable from '../components/motion/CheckinPressable'
 
@@ -52,7 +48,7 @@ function memberDietTotal(records: CheckinRecord[]): number {
 
 export default function CheckinPage({ type = 'diet' }: CheckinPageProps) {
   const label = TYPE_LABELS[type]
-  const { currentMemberId } = useCurrentMember()
+  const navigate = useNavigate()
   const { data: membersRaw = [] } = useFamilyMembers()
   const { data: profiles = [] } = useCheckinProfiles()
 
@@ -64,12 +60,10 @@ export default function CheckinPage({ type = 'diet' }: CheckinPageProps) {
   const memberB = members[1]
 
   const [slotDate, setSlotDate] = useState(() => getShanghaiDateString())
-  const [dietOpen, setDietOpen] = useState(false)
-  const [exerciseOpen, setExerciseOpen] = useState(false)
-  const [waterOpen, setWaterOpen] = useState(false)
 
+  const editable = isRecordEditable(slotDate)
   const { data: records = [], isLoading } = useCheckinRecords({ slotDate, recordType: type })
-  const createRecord = useCreateCheckinRecord()
+  const deleteRecord = useDeleteCheckinRecord()
 
   const recordsA = useMemo(
     () => (memberA ? records.filter((r) => r.memberId === memberA.id) : []),
@@ -116,69 +110,13 @@ export default function CheckinPage({ type = 'diet' }: CheckinPageProps) {
     return banners
   }, [type, recordsA, recordsB, profiles, memberA, memberB])
 
-  async function createDiet(value: {
-    foodId?: string | null
-    name: string
-    g: number
-    mealType?: string | null
-    recordedAt: string
-    nutrition: { calories: number; protein: number; fat: number; carbs: number }
-  }) {
-    if (!currentMemberId) throw new Error('请先选择成员')
-    const payload: DietPayload = {
-      foodId: value.foodId ?? null,
-      name: value.name,
-      calories: value.nutrition.calories,
-      protein: value.nutrition.protein,
-      fat: value.nutrition.fat,
-      carbs: value.nutrition.carbs,
-      amount: value.mealType ?? null,
-      g: value.g,
-    }
-    await createRecord.mutateAsync({
-      memberId: currentMemberId,
-      recordType: 'diet',
-      recordedAt: value.recordedAt,
-      payload,
-    })
+  function handleViewRecord(record: CheckinRecord) {
+    navigate(checkinRecordDetailPath(record.id))
   }
 
-  async function createExercise(value: { name: string; minutes: number; recordedAt: string }) {
-    if (!currentMemberId) throw new Error('请先选择成员')
-    const payload: ExercisePayload = {
-      name: value.name,
-      value: value.minutes,
-      unit: 'min',
-      presetId: null,
-    }
-    await createRecord.mutateAsync({
-      memberId: currentMemberId,
-      recordType: 'exercise',
-      recordedAt: value.recordedAt,
-      payload,
-    })
-  }
-
-  async function createWater(value: { name: string; ml: number; recordedAt: string }) {
-    if (!currentMemberId) throw new Error('请先选择成员')
-    const payload: WaterPayload = {
-      name: value.name,
-      ml: value.ml,
-      presetId: null,
-      iconKey: null,
-    }
-    await createRecord.mutateAsync({
-      memberId: currentMemberId,
-      recordType: 'water',
-      recordedAt: value.recordedAt,
-      payload,
-    })
-  }
-
-  function openFab() {
-    if (type === 'diet') setDietOpen(true)
-    else if (type === 'exercise') setExerciseOpen(true)
-    else setWaterOpen(true)
+  async function handleDeleteRecord(record: CheckinRecord) {
+    if (!window.confirm('确定删除这条记录？')) return
+    await deleteRecord.mutateAsync({ id: record.id })
   }
 
   return (
@@ -221,7 +159,7 @@ export default function CheckinPage({ type = 'diet' }: CheckinPageProps) {
         </div>
       ) : records.length === 0 ? (
         <div className="flex flex-1 items-center justify-center rounded-card border border-dashed border-border bg-card/50 p-8 text-center text-muted-foreground">
-          今天暂无记录，点击右下角添加
+          {editable ? '今天暂无记录，点击右下角添加' : '该日期暂无记录'}
         </div>
       ) : (
         <DualLaneTimeline
@@ -230,34 +168,21 @@ export default function CheckinPage({ type = 'diet' }: CheckinPageProps) {
           memberA={memberA}
           memberB={memberB}
           dietOverLimitByRecordId={type === 'diet' ? dietOverLimitByRecordId : undefined}
+          onViewRecord={handleViewRecord}
+          onDeleteRecord={editable ? handleDeleteRecord : undefined}
         />
       )}
 
-      <CheckinPressable
-        type="button"
-        onClick={openFab}
-        className="fixed bottom-[calc(88px+env(safe-area-inset-bottom))] right-4 flex size-12 items-center justify-center rounded-full bg-primary p-0 text-primary-foreground shadow-lg"
-        aria-label={`新增${label}记录`}
-      >
-        <Plus className="size-5" aria-hidden />
-      </CheckinPressable>
-
-      <DietRecordForm
-        open={dietOpen}
-        onClose={() => setDietOpen(false)}
-        memberId={currentMemberId}
-        onSubmit={(v) => createDiet(v)}
-      />
-      <ExerciseRecordForm
-        open={exerciseOpen}
-        onClose={() => setExerciseOpen(false)}
-        onSubmit={(v) => createExercise(v)}
-      />
-      <WaterRecordForm
-        open={waterOpen}
-        onClose={() => setWaterOpen(false)}
-        onSubmit={(v) => createWater(v)}
-      />
+      {editable ? (
+        <CheckinPressable
+          type="button"
+          onClick={() => navigate(checkinRecordNewPath(type, slotDate))}
+          className="fixed bottom-[calc(88px+env(safe-area-inset-bottom))] right-4 flex size-12 items-center justify-center rounded-full bg-primary p-0 text-primary-foreground shadow-lg"
+          aria-label={`新增${label}记录`}
+        >
+          <Plus className="size-5" aria-hidden />
+        </CheckinPressable>
+      ) : null}
     </div>
   )
 }
