@@ -13,6 +13,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom'
 import NotificationCenter from '../NotificationCenter'
 import MemberSwitcher from '../../../portal/components/MemberSwitcher'
 import AppTabBar, { tabBarBottomOffset } from '../../../../shared/components/AppTabBar'
+import AppPressable from '../../../../shared/components/motion/AppPressable'
 import { Button } from '@/components/ui/button'
 
 const tabs = [
@@ -67,16 +68,22 @@ export default function TodoTabLayout() {
       </main>
 
       {showFab ? (
-        <Button
-          size="icon-lg"
-          className="fixed right-4 z-30 size-12 rounded-full shadow-lg"
+        <AppPressable
+          as="div"
+          className="fixed right-4 z-30"
           style={{ bottom: `calc(${tabBarBottomOffset} + 0.75rem)` }}
-          asChild
+          aria-label="新建待办"
         >
-          <Link to="/todos/new" aria-label="新建待办">
-            <Plus className="size-6" />
-          </Link>
-        </Button>
+          <Button
+            size="icon-lg"
+            className="size-12 rounded-full shadow-lg"
+            asChild
+          >
+            <Link to="/todos/new">
+              <Plus className="size-6" />
+            </Link>
+          </Button>
+        </AppPressable>
       ) : null}
 
       <AppTabBar tabs={tabs} labelClassName="text-[10px]" />

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'rea
 import { useNavigate, useParams } from 'react-router-dom'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Button } from '@/components/ui/button'
-import BottomSheet from '../../../shared/components/ui/BottomSheet'
+import AppMotionBottomSheet from '../../../shared/components/motion/AppMotionBottomSheet'
 import DateField, {
   dateFieldFromIso,
   isoFromDateField,
@@ -167,7 +167,7 @@ function MultiOptionSheet({
   showMemberAvatar?: boolean
 }) {
   return (
-    <BottomSheet open={open} onClose={onClose} title={title}>
+    <AppMotionBottomSheet open={open} onClose={onClose} title={title}>
       <ul className="max-h-[50svh] overflow-y-auto">
         {options.map((opt) => {
           const selected = selectedIds.includes(opt.id)
@@ -195,7 +195,7 @@ function MultiOptionSheet({
           确定
         </Button>
       </div>
-    </BottomSheet>
+    </AppMotionBottomSheet>
   )
 }
 
@@ -223,7 +223,7 @@ function OptionSheet({
   showMemberAvatar?: boolean
 }) {
   return (
-    <BottomSheet open={open} onClose={onClose} title={title}>
+    <AppMotionBottomSheet open={open} onClose={onClose} title={title}>
       <ul className="max-h-[50svh] overflow-y-auto">
         {options.map((opt) => (
           <li key={opt.id}>
@@ -256,7 +256,7 @@ function OptionSheet({
           </li>
         ))}
       </ul>
-    </BottomSheet>
+    </AppMotionBottomSheet>
   )
 }
 

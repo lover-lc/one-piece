@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CalendarDays, X } from 'lucide-react'
-import BottomSheet from './ui/BottomSheet'
+import AppMotionBottomSheet from './motion/AppMotionBottomSheet'
 import { DatePickerCalendar } from './DatePickerCalendar'
 import { parseISODate, toISODate } from '../lib/date-utils'
 import {
@@ -146,7 +146,7 @@ export default function DateField({
         </Button>
       ) : null}
 
-      <BottomSheet open={open} onClose={handleClose} title={label ?? '选择日期'}>
+      <AppMotionBottomSheet open={open} onClose={handleClose} title={label ?? '选择日期'}>
         <DatePickerCalendar selected={selectedDate} onSelect={applyDraftDate} />
         {showTime ? (
           <div className="border-t border-border px-4 py-3">
@@ -165,7 +165,7 @@ export default function DateField({
             确定
           </Button>
         </div>
-      </BottomSheet>
+      </AppMotionBottomSheet>
     </div>
   )
 }

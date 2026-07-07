@@ -2,12 +2,13 @@ import { useMemo, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 
-export type AppTheme = 'auth' | 'portal' | 'items' | 'todos'
+export type AppTheme = 'auth' | 'portal' | 'items' | 'todos' | 'checkin'
 
 export function themeFromPathname(pathname: string): AppTheme {
   if (pathname.startsWith('/login')) return 'auth'
   if (pathname.startsWith('/items')) return 'items'
   if (pathname.startsWith('/todos')) return 'todos'
+  if (pathname.startsWith('/checkin')) return 'checkin'
   return 'portal'
 }
 

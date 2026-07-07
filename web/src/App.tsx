@@ -27,6 +27,11 @@ import LoginPage from './shared/pages/LoginPage'
 import SceneViewPage from './modules/everything/pages/SceneViewPage'
 import SetupPage from './modules/everything/pages/SetupPage'
 import EverythingLayout from './modules/everything/pages/EverythingLayout'
+import CheckinModuleLayout from './modules/checkin/components/layout/CheckinModuleLayout'
+import CheckinTabLayout from './modules/checkin/components/layout/CheckinTabLayout'
+import CheckinPage from './modules/checkin/pages/CheckinPage'
+import CheckinOverviewPage from './modules/checkin/pages/CheckinOverviewPage'
+import CheckinProfilePage from './modules/checkin/pages/CheckinProfilePage'
 
 const queryClient = new QueryClient()
 
@@ -81,6 +86,16 @@ function AppRoutes() {
                 <Route path="manage" element={<TodoManagePage />} />
               </Route>
               <Route path=":id/edit" element={<TodoFormPage />} />
+            </Route>
+
+            <Route path="/checkin" element={<CheckinModuleLayout />}>
+              <Route element={<CheckinTabLayout />}>
+                <Route index element={<CheckinPage type="diet" />} />
+                <Route path="exercise" element={<CheckinPage type="exercise" />} />
+                <Route path="water" element={<CheckinPage type="water" />} />
+                <Route path="overview" element={<CheckinOverviewPage />} />
+                <Route path="profile" element={<CheckinProfilePage />} />
+              </Route>
             </Route>
           </Route>
         </Route>

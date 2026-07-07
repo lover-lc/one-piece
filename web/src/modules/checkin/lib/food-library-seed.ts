@@ -1,0 +1,61 @@
+export type FoodLibrarySeedItem = {
+  name: string
+  kcalPer100g: number
+  proteinPer100g: number
+  fatPer100g: number
+  carbsPer100g: number
+}
+
+/** ~50 common Chinese foods for the system food library (user_id IS NULL). */
+export const FOOD_LIBRARY_SEED: FoodLibrarySeedItem[] = [
+  { name: '白米饭', kcalPer100g: 116, proteinPer100g: 2.6, fatPer100g: 0.3, carbsPer100g: 25.9 },
+  { name: '馒头', kcalPer100g: 223, proteinPer100g: 7.0, fatPer100g: 1.1, carbsPer100g: 47.0 },
+  { name: '水煮蛋', kcalPer100g: 144, proteinPer100g: 13.3, fatPer100g: 8.8, carbsPer100g: 1.1 },
+  { name: '鸡胸肉', kcalPer100g: 133, proteinPer100g: 19.4, fatPer100g: 5.0, carbsPer100g: 2.5 },
+  { name: '西兰花', kcalPer100g: 34, proteinPer100g: 2.8, fatPer100g: 0.4, carbsPer100g: 6.6 },
+  { name: '苹果', kcalPer100g: 52, proteinPer100g: 0.3, fatPer100g: 0.2, carbsPer100g: 13.8 },
+  { name: '牛奶', kcalPer100g: 54, proteinPer100g: 3.0, fatPer100g: 3.2, carbsPer100g: 4.8 },
+  { name: '油条', kcalPer100g: 386, proteinPer100g: 8.0, fatPer100g: 22.0, carbsPer100g: 42.0 },
+  { name: '红烧肉', kcalPer100g: 395, proteinPer100g: 12.0, fatPer100g: 35.0, carbsPer100g: 4.0 },
+  { name: '番茄炒蛋', kcalPer100g: 120, proteinPer100g: 6.5, fatPer100g: 8.0, carbsPer100g: 5.5 },
+  { name: '面条(煮)', kcalPer100g: 138, proteinPer100g: 4.5, fatPer100g: 0.5, carbsPer100g: 28.0 },
+  { name: '花卷', kcalPer100g: 211, proteinPer100g: 6.4, fatPer100g: 1.0, carbsPer100g: 45.6 },
+  { name: '小米粥', kcalPer100g: 46, proteinPer100g: 1.4, fatPer100g: 0.7, carbsPer100g: 9.0 },
+  { name: '玉米', kcalPer100g: 106, proteinPer100g: 4.0, fatPer100g: 1.2, carbsPer100g: 22.8 },
+  { name: '红薯', kcalPer100g: 86, proteinPer100g: 1.6, fatPer100g: 0.1, carbsPer100g: 20.1 },
+  { name: '紫薯', kcalPer100g: 82, proteinPer100g: 1.5, fatPer100g: 0.2, carbsPer100g: 19.5 },
+  { name: '土豆', kcalPer100g: 77, proteinPer100g: 2.0, fatPer100g: 0.1, carbsPer100g: 17.5 },
+  { name: '豆腐', kcalPer100g: 81, proteinPer100g: 8.1, fatPer100g: 3.7, carbsPer100g: 4.2 },
+  { name: '豆浆', kcalPer100g: 31, proteinPer100g: 3.0, fatPer100g: 1.6, carbsPer100g: 1.8 },
+  { name: '酸奶', kcalPer100g: 72, proteinPer100g: 2.5, fatPer100g: 2.7, carbsPer100g: 9.3 },
+  { name: '煎蛋', kcalPer100g: 196, proteinPer100g: 13.6, fatPer100g: 15.0, carbsPer100g: 1.2 },
+  { name: '虾仁', kcalPer100g: 93, proteinPer100g: 18.6, fatPer100g: 1.2, carbsPer100g: 0.5 },
+  { name: '牛肉(瘦)', kcalPer100g: 106, proteinPer100g: 20.2, fatPer100g: 2.3, carbsPer100g: 0.0 },
+  { name: '猪里脊', kcalPer100g: 143, proteinPer100g: 20.3, fatPer100g: 6.2, carbsPer100g: 1.5 },
+  { name: '鲫鱼', kcalPer100g: 108, proteinPer100g: 17.1, fatPer100g: 2.7, carbsPer100g: 3.8 },
+  { name: '三文鱼', kcalPer100g: 208, proteinPer100g: 20.0, fatPer100g: 13.0, carbsPer100g: 0.0 },
+  { name: '黄瓜', kcalPer100g: 16, proteinPer100g: 0.7, fatPer100g: 0.1, carbsPer100g: 3.6 },
+  { name: '生菜', kcalPer100g: 15, proteinPer100g: 1.4, fatPer100g: 0.2, carbsPer100g: 2.9 },
+  { name: '菠菜', kcalPer100g: 28, proteinPer100g: 2.6, fatPer100g: 0.3, carbsPer100g: 4.5 },
+  { name: '胡萝卜', kcalPer100g: 39, proteinPer100g: 0.9, fatPer100g: 0.2, carbsPer100g: 9.6 },
+  { name: '西红柿', kcalPer100g: 18, proteinPer100g: 0.9, fatPer100g: 0.2, carbsPer100g: 3.9 },
+  { name: '大白菜', kcalPer100g: 17, proteinPer100g: 1.5, fatPer100g: 0.1, carbsPer100g: 3.2 },
+  { name: '青椒', kcalPer100g: 22, proteinPer100g: 1.0, fatPer100g: 0.2, carbsPer100g: 5.4 },
+  { name: '豆角', kcalPer100g: 30, proteinPer100g: 2.5, fatPer100g: 0.2, carbsPer100g: 6.0 },
+  { name: '茄子', kcalPer100g: 25, proteinPer100g: 1.1, fatPer100g: 0.2, carbsPer100g: 5.9 },
+  { name: '冬瓜', kcalPer100g: 12, proteinPer100g: 0.4, fatPer100g: 0.1, carbsPer100g: 2.6 },
+  { name: '香蕉', kcalPer100g: 89, proteinPer100g: 1.1, fatPer100g: 0.2, carbsPer100g: 22.8 },
+  { name: '橙子', kcalPer100g: 47, proteinPer100g: 0.8, fatPer100g: 0.2, carbsPer100g: 11.8 },
+  { name: '草莓', kcalPer100g: 32, proteinPer100g: 0.7, fatPer100g: 0.3, carbsPer100g: 7.7 },
+  { name: '西瓜', kcalPer100g: 30, proteinPer100g: 0.6, fatPer100g: 0.2, carbsPer100g: 7.6 },
+  { name: '宫保鸡丁', kcalPer100g: 195, proteinPer100g: 14.0, fatPer100g: 10.5, carbsPer100g: 10.0 },
+  { name: '麻婆豆腐', kcalPer100g: 125, proteinPer100g: 8.0, fatPer100g: 7.5, carbsPer100g: 5.0 },
+  { name: '清炒时蔬', kcalPer100g: 45, proteinPer100g: 2.0, fatPer100g: 2.5, carbsPer100g: 4.0 },
+  { name: '蛋炒饭', kcalPer100g: 188, proteinPer100g: 6.5, fatPer100g: 7.0, carbsPer100g: 25.0 },
+  { name: '水饺', kcalPer100g: 220, proteinPer100g: 7.5, fatPer100g: 8.0, carbsPer100g: 30.0 },
+  { name: '肉包', kcalPer100g: 227, proteinPer100g: 9.0, fatPer100g: 8.5, carbsPer100g: 30.0 },
+  { name: '馄饨', kcalPer100g: 150, proteinPer100g: 6.0, fatPer100g: 4.5, carbsPer100g: 20.0 },
+  { name: '扬州炒饭', kcalPer100g: 190, proteinPer100g: 7.0, fatPer100g: 7.5, carbsPer100g: 24.0 },
+  { name: '炸鸡腿', kcalPer100g: 250, proteinPer100g: 18.0, fatPer100g: 15.0, carbsPer100g: 8.0 },
+  { name: '薯条', kcalPer100g: 312, proteinPer100g: 3.4, fatPer100g: 15.0, carbsPer100g: 41.0 },
+]

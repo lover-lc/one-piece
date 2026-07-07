@@ -175,6 +175,43 @@
   --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
 }
 
+[data-theme="checkin"] {
+  --background: #f0f9ff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #059669;
+  --secondary-foreground: #ffffff;
+  --muted: #e0f2fe;
+  --muted-foreground: #64748b;
+  --accent: #d97706;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --border: #bae6fd;
+  --input: #bae6fd;
+  --ring: #2563eb;
+  --radius: 0.875rem;
+  --status-expired: #dc2626;
+  --status-expiring: #d97706;
+  --status-active: #059669;
+  --status-used-up: #64748b;
+  --shadow-card: 0 2px 8px rgba(37, 99, 235, 0.08), 0 4px 16px rgba(0, 0, 0, 0.04);
+  --font-sans: "Barlow", ui-sans-serif, system-ui, sans-serif;
+  --font-heading: "Barlow Condensed", "Barlow", ui-sans-serif, system-ui, sans-serif;
+  --checkin-diet: #d97706;
+  --checkin-exercise: #059669;
+  --checkin-water: #2563eb;
+  --checkin-over-limit: #dc2626;
+  --checkin-tie: #e2e8f0;
+  --checkin-cell-size: 26px;
+  --checkin-cell-gap: 2px;
+  --checkin-progress-height: 3px;
+}
+
 body {
   margin: 0;
   font-family: var(--font-sans);

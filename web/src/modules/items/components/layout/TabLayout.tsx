@@ -10,6 +10,7 @@ import {
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import AppTabBar, { tabBarBottomOffset } from '../../../../shared/components/AppTabBar'
+import AppPressable from '../../../../shared/components/motion/AppPressable'
 import { ItemsSearchFocusProvider, useItemsSearchFocus } from '../../context/items-search-focus'
 
 const tabs = [
@@ -51,7 +52,7 @@ function TabLayoutContent() {
   return (
     <div className="flex min-h-svh flex-col">
       <main
-        className="flex-1"
+        className="flex min-h-0 flex-1 flex-col overflow-hidden"
         style={{
           paddingBottom: showFab
             ? `calc(${tabBarBottomOffset} + 3.5rem)`
@@ -62,16 +63,22 @@ function TabLayoutContent() {
       </main>
 
       {showFab ? (
-        <Button
-          size="icon-lg"
-          className="fixed right-4 z-30 size-12 rounded-full shadow-lg"
+        <AppPressable
+          as="div"
+          className="fixed right-4 z-30"
           style={{ bottom: `calc(${tabBarBottomOffset} + 0.75rem)` }}
-          asChild
+          aria-label="添加物品"
         >
-          <Link to="/items/new" aria-label="添加物品">
-            <Plus className="size-6" />
-          </Link>
-        </Button>
+          <Button
+            size="icon-lg"
+            className="size-12 rounded-full shadow-lg"
+            asChild
+          >
+            <Link to="/items/new">
+              <Plus className="size-6" />
+            </Link>
+          </Button>
+        </AppPressable>
       ) : null}
 
       <AppTabBar tabs={tabsWithHandlers} />

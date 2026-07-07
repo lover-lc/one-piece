@@ -1,6 +1,6 @@
 import NotificationCenter from '../../todos/components/NotificationCenter'
 import { usePortalStats } from '../../todos/hooks/use-todos'
-import { Package, CheckSquare, Settings, Box } from 'lucide-react'
+import { Package, CheckSquare, Settings, Box, Activity } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import AppCard, { PortalAppGrid } from '../components/AppCard'
 import MemberSwitcher from '../components/MemberSwitcher'
@@ -28,6 +28,18 @@ export default function PortalPage() {
 
       <main className="mx-auto max-w-lg p-4">
         <PortalAppGrid>
+          <AppCard
+            title="打卡模块"
+            description="饮食、运动与喝水双人打卡"
+            to="/checkin"
+            accentColor="#059669"
+            icon={<Activity className="size-6" />}
+            stats={[
+              { label: '今日饮食', value: '—' },
+              { label: '今日运动', value: '—' },
+            ]}
+          />
+
           <AppCard
             title="物品管理"
             description="管理家庭物品、区域与分类"

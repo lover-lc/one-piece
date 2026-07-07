@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import BottomSheet from '../../../shared/components/ui/BottomSheet'
+import AppMotionBottomSheet from '../../../shared/components/motion/AppMotionBottomSheet'
 import ItemHero from '../components/ItemHero'
 import ItemFields, { type ItemFieldsCostStats } from '../components/ItemFields'
 import { useAreas } from '../hooks/use-areas'
@@ -39,7 +39,7 @@ function OptionSheet({
   onClose: () => void
 }) {
   return (
-    <BottomSheet open={open} onClose={onClose} title={title}>
+    <AppMotionBottomSheet open={open} onClose={onClose} title={title}>
       <ul className="max-h-[50svh] overflow-y-auto">
         {options.map((opt) => (
           <li key={opt.id}>
@@ -58,7 +58,7 @@ function OptionSheet({
           </li>
         ))}
       </ul>
-    </BottomSheet>
+    </AppMotionBottomSheet>
   )
 }
 

@@ -16,6 +16,7 @@ import EntityMigrationDialog, {
   type ContainerMigrationAssignment,
 } from '../components/EntityMigrationDialog'
 import ManageList, { type ManageEntity } from '../components/ManageList'
+import AppSegmentedControl from '../../../shared/components/motion/AppSegmentedControl'
 import {
   useAreas,
   useCreateArea,
@@ -457,29 +458,20 @@ export default function ManagePage() {
       </header>
 
       <div className="px-4 py-4">
-        <div
-          role="tablist"
+        <AppSegmentedControl
           aria-label="管理类型"
-          className="flex rounded-button bg-bg-hover p-1"
-        >
-          {(['area', 'category', 'unit'] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              role="tab"
-              aria-selected={mode === tab}
-              onClick={() => setMode(tab)}
-              className={[
-                'flex-1 rounded-button py-2 text-sm font-medium transition-colors',
-                mode === tab
-                  ? 'bg-bg-card text-text shadow-sm'
-                  : 'text-text-secondary hover:text-text',
-              ].join(' ')}
-            >
-              {tab === 'area' ? '区域/容器' : tab === 'category' ? '分类' : '单位'}
-            </button>
-          ))}
-        </div>
+          className="w-full rounded-button bg-bg-hover"
+          segmentClassName="rounded-button"
+          size="md"
+          layoutIdPrefix="items-manage"
+          options={[
+            { value: 'area' as const, label: '区域/容器' },
+            { value: 'category' as const, label: '分类' },
+            { value: 'unit' as const, label: '单位' },
+          ]}
+          value={mode}
+          onChange={setMode}
+        />
 
         <div className="mt-4">
           {mode === 'area' ? (

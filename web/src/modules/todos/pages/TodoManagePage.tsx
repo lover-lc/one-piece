@@ -16,6 +16,7 @@ import {
 } from '../hooks/use-todos'
 import { countTodosPerList } from '../lib/todo-list-placement'
 import type { TodoList } from '../types/todo-types'
+import AppSegmentedControl from '../../../shared/components/motion/AppSegmentedControl'
 
 function DeleteListDialog({
   listName,
@@ -112,29 +113,16 @@ export default function TodoManagePage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden px-4 py-3">
-      <div
-        role="tablist"
+      <AppSegmentedControl
         aria-label="待办管理"
-        className="mb-3 shrink-0 flex rounded-button bg-bg-hover p-1"
-      >
-        {segments.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            role="tab"
-            aria-selected={segment === item.id}
-            onClick={() => setSegment(item.id)}
-            className={[
-              'flex-1 rounded-button py-2 text-sm font-medium transition-colors',
-              segment === item.id
-                ? 'bg-bg-card text-text shadow-sm'
-                : 'text-text-secondary hover:text-text',
-            ].join(' ')}
-          >
-            {item.label}
-          </button>
-        ))}
-      </div>
+        className="mb-3 w-full shrink-0 rounded-button bg-bg-hover"
+        segmentClassName="rounded-button"
+        size="md"
+        layoutIdPrefix="todo-manage"
+        options={segments.map((item) => ({ value: item.id, label: item.label }))}
+        value={segment}
+        onChange={setSegment}
+      />
 
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {segment === 'lists' ? (
