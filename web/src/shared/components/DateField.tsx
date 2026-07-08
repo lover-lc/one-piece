@@ -6,7 +6,7 @@ import { parseISODate, toISODate } from '../lib/date-utils'
 import {
   composeAllDayIso,
   composeLocalIso,
-  formatDateTimeDisplay,
+  formatTimedFieldDisplay,
   formatTimeFromIso,
   isoToLocalDate,
 } from '../lib/datetime-utils'
@@ -26,6 +26,8 @@ type DateFieldProps = {
   placeholder?: string
   allowClear?: boolean
   className?: string
+  compact?: boolean
+  hideIcon?: boolean
 }
 
 export function dateFieldFromIso(
@@ -62,6 +64,8 @@ export default function DateField({
   placeholder = '选择日期',
   allowClear = true,
   className,
+  compact = false,
+  hideIcon = false,
 }: DateFieldProps) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<DateFieldValue>(value)
@@ -114,32 +118,37 @@ export default function DateField({
 
   const display = value.iso
     ? showTime
-      ? formatDateTimeDisplay(value.iso, !value.hasTime)
+      ? formatTimedFieldDisplay(value.iso)
       : isoToLocalDate(value.iso)?.replace(/-/g, '/') ?? placeholder
     : placeholder
 
   return (
-    <div className={cn('flex items-center gap-2', className)}>
+    <div className={cn('flex items-center gap-1.5', compact && 'w-full min-w-0', className)}>
       {label ? <span className="shrink-0 text-sm text-muted-foreground">{label}</span> : null}
       <button
         type="button"
         onClick={handleOpen}
         className={cn(
-          'inline-flex min-h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-input bg-background px-2 text-sm',
+          'inline-flex min-h-9 min-w-0 items-center gap-1.5 rounded-md border border-input bg-background px-2 text-sm',
+          compact ? 'flex-1' : 'flex-1',
           !value.iso && 'text-muted-foreground',
         )}
       >
-        <CalendarDays className="size-4 shrink-0 opacity-60" />
-        <span className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap text-sm tabular-nums">
+        {hideIcon ? null : (
+          <CalendarDays className="size-4 shrink-0 opacity-60" />
+        )}
+        <span className="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-sm tabular-nums">
           {display}
         </span>
       </button>
-      {allowClear && value.iso ? (
+      {allowClear ? (
         <Button
           type="button"
           variant="ghost"
           size="icon-sm"
+          className={cn('shrink-0', !value.iso && 'pointer-events-none opacity-0')}
           aria-label="清除日期"
+          disabled={!value.iso}
           onClick={() => onChange({ iso: null, hasTime: false })}
         >
           <X className="size-4" />

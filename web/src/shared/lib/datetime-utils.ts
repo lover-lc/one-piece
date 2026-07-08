@@ -47,3 +47,10 @@ export function formatDateTimeDisplay(
   }
   return `${date.replace(/-/g, '/')} ${formatTimeFromIso(iso)}`
 }
+
+export function formatTimedFieldDisplay(iso: string | null | undefined): string {
+  if (!iso) return '未设置'
+  const date = isoToLocalDate(iso)
+  if (!date) return '未设置'
+  return `${date.replace(/-/g, '/')} ${formatTimeFromIso(iso)}`
+}

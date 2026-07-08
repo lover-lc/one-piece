@@ -18,6 +18,7 @@ type TodoCardProps = {
   checkboxAction: TodoCheckboxAction
   onCheckboxAction?: (todo: TodoItem) => void
   statusReason?: string | null
+  optimisticCompleted?: boolean
 }
 
 function formatDueLabel(dueDate: string, isOverdue: boolean): string {
@@ -34,13 +35,14 @@ export default function TodoCard({
   checkboxAction,
   onCheckboxAction,
   statusReason,
+  optimisticCompleted = false,
 }: TodoCardProps) {
-  const isChecked = isTodoCheckboxChecked(todo.status)
+  const isChecked = isTodoCheckboxChecked(todo.status) || optimisticCompleted
   const isPendingReview = todo.status === 'pending_review'
   const isAssignedInProgress =
     isAssignedTodo(todo) && todo.status === 'in_progress'
   const reasonStatus = isReasonStatus(todo.status) ? todo.status : null
-  const isCompleted = todo.status === 'completed'
+  const isCompleted = todo.status === 'completed' || optimisticCompleted
   const isOverdue =
     !isChecked &&
     !isPendingReview &&

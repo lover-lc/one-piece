@@ -9,7 +9,7 @@ import DateField, {
   isoFromDateField,
   type DateFieldValue,
 } from '../../../shared/components/DateField'
-import { isoToLocalDate } from '../../../shared/lib/datetime-utils'
+import { isoToLocalDate, composeAllDayIso } from '../../../shared/lib/datetime-utils'
 import MemberAvatar from '../../../shared/components/MemberAvatar'
 import PageHeaderBar from '../../../shared/components/PageHeaderBar'
 import { useCurrentMember } from '../../../shared/hooks/use-current-member'
@@ -22,12 +22,14 @@ import {
   useTodoLists,
   useTodoStatusAction,
   useTodoStatusLogs,
-  useTodoTags,
   useUpdateTodo,
 } from '../hooks/use-todos'
 import TodoActionDialog from '../components/TodoActionDialog'
 import TodoStatusReasonBanner from '../components/TodoStatusReasonBanner'
-import { deriveRequireFeedback } from '../lib/require-feedback'
+import {
+  deriveRequireFeedback,
+  normalizeAssigneeIds,
+} from '../lib/require-feedback'
 import {
   effectiveListIdFromTodo,
   listFormToPlacements,
@@ -69,17 +71,13 @@ import { cn } from '@/lib/utils'
 
 type FormFieldKey = 'title' | 'listId' | 'assigneeId' | 'dateRange'
 
-const PRIORITY_OPTIONS: { id: string; name: string }[] = [
-  { id: '', name: '未设置' },
-  { id: 'high', name: '高' },
-  { id: 'medium', name: '中' },
-  { id: 'low', name: '低' },
-]
-
 const REMINDER_NONE_ID_LOCAL = REMINDER_NONE_ID
 
 const fieldInputClass =
   'w-full rounded-button border border-bg-hover bg-bg px-3 py-2 text-sm text-text outline-none focus:border-primary'
+
+/** 与「开始日期」等宽，统一控件区左边缘 */
+const formLabelColClass = 'w-[4rem] shrink-0 text-sm text-text-secondary'
 
 function FormCard({ children }: { children: ReactNode }) {
   return (
@@ -95,28 +93,54 @@ function FormRow({
   error,
   rowRef,
   highlighted,
+  layout = 'horizontal',
+  contentAlign = 'center',
 }: {
-  label?: string
+  label?: ReactNode
   children: ReactNode
   error?: string | null
   rowRef?: RefObject<HTMLDivElement | null>
   highlighted?: boolean
+  layout?: 'horizontal' | 'vertical'
+  contentAlign?: 'center' | 'start'
 }) {
+  const rowClass = cn(
+    'px-4 py-2',
+    error && 'bg-status-expired/5 ring-2 ring-inset ring-status-expired/40',
+    highlighted &&
+      !error &&
+      'bg-amber-50 ring-1 ring-inset ring-amber-200 dark:bg-amber-950/30 dark:ring-amber-800/50',
+  )
+
+  if (layout === 'vertical') {
+    return (
+      <div ref={rowRef} className={rowClass}>
+        {label ? (
+          <label className="mb-1 block text-xs text-text-secondary">{label}</label>
+        ) : null}
+        {children}
+        {error ? <p className="mt-1 text-xs text-status-expired">{error}</p> : null}
+      </div>
+    )
+  }
+
   return (
-    <div
-      ref={rowRef}
-      className={cn(
-        'px-4 py-2',
-        error && 'bg-status-expired/5 ring-2 ring-inset ring-status-expired/40',
-        highlighted &&
-          !error &&
-          'bg-amber-50 ring-1 ring-inset ring-amber-200 dark:bg-amber-950/30 dark:ring-amber-800/50',
-      )}
-    >
-      {label ? (
-        <label className="mb-1 block text-xs text-text-secondary">{label}</label>
-      ) : null}
-      {children}
+    <div ref={rowRef} className={rowClass}>
+      <div
+        className={cn(
+          'flex gap-1.5',
+          contentAlign === 'start' ? 'items-start' : 'items-center',
+        )}
+      >
+        {label != null && label !== '' ? (
+          typeof label === 'string' ? (
+            <span className={formLabelColClass}>{label}</span>
+          ) : (
+            <div className={cn(formLabelColClass, 'overflow-visible')}>{label}</div>
+          )
+        ) : null}
+        <div className="min-w-0 flex-1">{children}</div>
+      </div>
       {error ? <p className="mt-1 text-xs text-status-expired">{error}</p> : null}
     </div>
   )
@@ -184,7 +208,7 @@ function MultiOptionSheet({
                   <MemberAvatar member={opt.member} size="sm" />
                 ) : null}
                 <span className="min-w-0 flex-1 truncate">{opt.name}</span>
-                {selected ? <span className="text-xs text-primary">已选</span> : null}
+                <Checkbox checked={selected} aria-hidden tabIndex={-1} />
               </button>
             </li>
           )
@@ -267,7 +291,6 @@ export default function TodoFormPage() {
   const { currentMemberId } = useCurrentMember()
   const { data: members = [] } = useFamilyMembers()
   const { data: lists = [] } = useTodoLists()
-  const { data: tags = [] } = useTodoTags()
   const { data: existing, isLoading: todoLoading } = useTodo(id)
   const { data: statusLogs = [] } = useTodoStatusLogs(id)
   const createTodo = useCreateTodo()
@@ -304,7 +327,6 @@ export default function TodoFormPage() {
   const [updateSeries, setUpdateSeries] = useState(false)
   const [listSheetOpen, setListSheetOpen] = useState(false)
   const [assigneeSheetOpen, setAssigneeSheetOpen] = useState(false)
-  const [prioritySheetOpen, setPrioritySheetOpen] = useState(false)
   const [recurrenceSheetOpen, setRecurrenceSheetOpen] = useState(false)
   const [reminderSheetOpen, setReminderSheetOpen] = useState(false)
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false)
@@ -383,8 +405,9 @@ export default function TodoFormPage() {
 
   const selectedList = lists.find((l) => l.id === listId) ?? null
   const selectedListName = selectedList ? listOptionLabel(selectedList) : null
-  const selectedAssignee = members.find((m) => m.id === assigneeId) ?? null
-  const selectedAssignees = members.filter((m) => assigneeIds.includes(m.id))
+  const selectedAssignees = members.filter((m) =>
+    normalizeAssigneeIds(assigneeIds, currentMemberId).includes(m.id),
+  )
   const reminderOptions = getEnabledReminderOptions(
     customReminderPresets,
     reminderPresetOrder,
@@ -396,8 +419,6 @@ export default function TodoFormPage() {
     recurrencePresetDisabled,
     { enabledOnly: true },
   ).map((p) => ({ id: p.id, name: p.name }))
-  const selectedPriorityName =
-    PRIORITY_OPTIONS.find((o) => o.id === priority)?.name ?? null
   const selectedRecurrenceName =
     selectedRecurrencePresetId !== 'builtin:none'
       ? (findRecurrencePreset(selectedRecurrencePresetId, customRecurrencePresets)?.name ?? null)
@@ -408,21 +429,23 @@ export default function TodoFormPage() {
     reminderSelection.type === 'none'
       ? '不提醒'
       : formatReminderSelectionLabel(reminderSelection, customReminderPresets)
-  const displayedTags = tags.filter((t) => tagIds.includes(t.id))
   const statusReasonLog =
     isEdit && existing && isReasonStatus(existing.status)
       ? getLatestStatusReason(statusLogs, existing.status)
       : null
   const isSaving =
     createTodo.isPending || updateTodo.isPending || saveNegotiation.isPending
-  const assignsToOther =
-    Boolean(assigneeId && currentMemberId && assigneeId !== currentMemberId)
-  const requireFeedback = deriveRequireFeedback(assigneeId, currentMemberId)
+  const normalizedAssigneeIds = normalizeAssigneeIds(assigneeIds, currentMemberId)
+  const assignsToOther = deriveRequireFeedback(normalizedAssigneeIds, currentMemberId)
+  const requireFeedback = assignsToOther
   const fieldsLocked = existing
     ? isFieldsLocked(existing.status, existing.requireFeedback)
     : false
   const canDelete =
     isEdit && existing ? canDeleteTodo(existing, currentMemberId) : false
+
+  const assigneeLocked =
+    isEdit && existing != null && existing.requireFeedback && fieldsLocked
 
   const startAt = isoFromDateField(startField, isAllDay)
   const dueAt = isoFromDateField(dueField, isAllDay)
@@ -472,13 +495,14 @@ export default function TodoFormPage() {
     const { privateListId, sharedListId } = listFormToPlacements(listId, lists)
     const customRemindAt =
       resolveReminderAt(reminderSelection, dueDate || null, customReminderPresets) ?? undefined
+    const ids = normalizeAssigneeIds(assigneeIds, currentMemberId)
     return {
       title,
       description,
       privateListId,
       sharedListId,
-      assigneeId: assignsToOther ? assigneeId : (assigneeIds[0] ?? assigneeId),
-      assigneeIds: assignsToOther ? undefined : assigneeIds,
+      assigneeId: ids[0] ?? assigneeId,
+      assigneeIds: assignsToOther ? undefined : ids,
       priority: priority || null,
       isAllDay,
       startAt,
@@ -502,14 +526,7 @@ export default function TodoFormPage() {
     const nextFieldErrors: Partial<Record<FormFieldKey, string>> = {}
     if (!title.trim()) nextFieldErrors.title = '标题不能为空'
     if (!listId) nextFieldErrors.listId = '请选择清单'
-    if (!assigneeId && !assignsToOther) nextFieldErrors.assigneeId = '请选择负责人'
-    if (!assignsToOther && assigneeIds.length === 0) {
-      nextFieldErrors.assigneeId = '请选择负责人'
-    }
-    if (assignsToOther && !assigneeId) nextFieldErrors.assigneeId = '请选择负责人'
-    if (isAllDay && !dueAt) {
-      nextFieldErrors.dateRange = '全天待办请选择截止日期'
-    }
+    if (normalizedAssigneeIds.length === 0) nextFieldErrors.assigneeId = '请选择负责人'
     if (startDate && dueDate && dueDate < startDate) {
       nextFieldErrors.dateRange = '截止日期不能早于开始日期'
     }
@@ -869,11 +886,16 @@ export default function TodoFormPage() {
       >
         <div className="space-y-3 px-4 py-2">
         <FormCard>
-          <FormRow
-            label="标题 *"
-            error={fieldErrors.title}
-            rowRef={titleRowRef}
-            highlighted={changedFields.has('title')}
+          <div
+            ref={titleRowRef}
+            className={cn(
+              'px-4 py-2',
+              fieldErrors.title &&
+                'bg-status-expired/5 ring-2 ring-inset ring-status-expired/40',
+              changedFields.has('title') &&
+                !fieldErrors.title &&
+                'bg-amber-50 ring-1 ring-inset ring-amber-200 dark:bg-amber-950/30 dark:ring-amber-800/50',
+            )}
           >
             <input
               ref={titleInputRef}
@@ -882,7 +904,10 @@ export default function TodoFormPage() {
               placeholder="待办标题"
               className={fieldInputClass}
             />
-          </FormRow>
+            {fieldErrors.title ? (
+              <p className="mt-1 text-xs text-status-expired">{fieldErrors.title}</p>
+            ) : null}
+          </div>
           <FormRow label="描述" highlighted={changedFields.has('description')}>
             <textarea
               value={description}
@@ -893,7 +918,7 @@ export default function TodoFormPage() {
             />
           </FormRow>
           <FormRow
-            label="清单 *"
+            label="清单"
             error={fieldErrors.listId}
             rowRef={listRowRef}
           >
@@ -902,73 +927,90 @@ export default function TodoFormPage() {
               onClick={() => setListSheetOpen(true)}
             />
           </FormRow>
-          <div className="grid grid-cols-2 gap-0 divide-x divide-bg-hover">
-            <FormRow
-              label="负责人 *"
-              error={fieldErrors.assigneeId}
-              rowRef={assigneeRowRef}
+          <FormRow
+            label="负责人"
+            error={fieldErrors.assigneeId}
+            rowRef={assigneeRowRef}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                if (assigneeLocked) return
+                setAssigneeSheetOpen(true)
+              }}
+              disabled={assigneeLocked}
+              className={cn(
+                'flex w-full min-w-0 items-center justify-between rounded-button border border-bg-hover bg-bg px-2 py-2 text-left text-sm',
+                assigneeLocked && 'opacity-60',
+              )}
             >
-              <button
-                type="button"
-                onClick={() => {
-                  if (isEdit && assignsToOther) return
-                  setAssigneeSheetOpen(true)
-                }}
-                disabled={isEdit && assignsToOther}
-                className={cn(
-                  'flex w-full min-w-0 items-center justify-between rounded-button border border-bg-hover bg-bg px-3 py-2 text-left text-sm',
-                  isEdit && assignsToOther && 'opacity-60',
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-2">
-                  {assignsToOther ? (
-                    selectedAssignee ? (
-                      <>
-                        <MemberAvatar member={selectedAssignee} size="sm" />
-                        <span className="truncate text-text">{selectedAssignee.name}</span>
-                      </>
-                    ) : (
-                      <span className="truncate text-text-tertiary">请选择</span>
-                    )
-                  ) : selectedAssignees.length > 0 ? (
-                    <span className="truncate text-text">
-                      {selectedAssignees.map((member) => member.name).join('、')}
+              <span className="flex min-w-0 flex-1 items-center gap-2">
+                {selectedAssignees.length > 0 ? (
+                  <>
+                    <span className="flex shrink-0 items-center">
+                      {selectedAssignees.slice(0, 5).map((member, index) => (
+                        <MemberAvatar
+                          key={member.id}
+                          member={member}
+                          size="sm"
+                          className={cn(index > 0 && '-ml-1.5 ring-2 ring-bg')}
+                        />
+                      ))}
+                      {selectedAssignees.length > 5 ? (
+                        <span
+                          className={cn(
+                            'inline-flex size-5 shrink-0 items-center justify-center rounded-full bg-bg-hover text-[10px] font-medium text-text-secondary',
+                            '-ml-1.5 ring-2 ring-bg',
+                          )}
+                        >
+                          +{selectedAssignees.length - 5}
+                        </span>
+                      ) : null}
                     </span>
-                  ) : (
-                    <span className="truncate text-text-tertiary">请选择</span>
-                  )}
-                </span>
-                <ChevronRight className="size-4 shrink-0 text-text-tertiary" />
-              </button>
-            </FormRow>
-            <FormRow label="优先级" highlighted={changedFields.has('priority')}>
-              <PickerButton
-                value={selectedPriorityName}
-                onClick={() => setPrioritySheetOpen(true)}
-              />
-            </FormRow>
-          </div>
+                    <span className="min-w-0 truncate text-text">
+                      {selectedAssignees.map((m) => m.name).join('、')}
+                    </span>
+                  </>
+                ) : (
+                  <span className="inline-flex size-5 shrink-0 items-center justify-center rounded-full border border-dashed border-bg-hover text-text-tertiary">
+                    <span className="text-sm leading-none">+</span>
+                  </span>
+                )}
+              </span>
+              <ChevronRight className="size-4 shrink-0 text-text-tertiary" />
+            </button>
+          </FormRow>
           <div ref={dateRowRef}>
-            <FormRow label="全天">
-              <label className="inline-flex items-center gap-2 text-sm">
-                <Checkbox
-                  checked={isAllDay}
-                  onCheckedChange={(v) => {
-                    const next = v === true
-                    setIsAllDay(next)
-                    if (!next) {
-                      setStartField((prev) => (prev.iso ? { ...prev, hasTime: true } : prev))
-                      setDueField((prev) => (prev.iso ? { ...prev, hasTime: true } : prev))
-                    }
-                  }}
-                />
-                <span>全天</span>
-              </label>
-              {isAllDay ? (
-                <p className="mt-1 text-xs text-text-tertiary">
-                  全天模式下仅选日期；取消勾选后可设置具体时间
-                </p>
-              ) : null}
+            <FormRow
+              label={
+                <label className="inline-flex items-center gap-2 text-sm text-text">
+                  <Checkbox
+                    checked={isAllDay}
+                    onCheckedChange={(v) => {
+                      const next = v === true
+                      setIsAllDay(next)
+                      if (next) {
+                        setStartField((prev) => {
+                          if (!prev.iso) return prev
+                          const date = isoToLocalDate(prev.iso)
+                          return date ? { iso: composeAllDayIso(date), hasTime: false } : prev
+                        })
+                        setDueField((prev) => {
+                          if (!prev.iso) return prev
+                          const date = isoToLocalDate(prev.iso)
+                          return date ? { iso: composeAllDayIso(date), hasTime: false } : prev
+                        })
+                      } else {
+                        setStartField((prev) => (prev.iso ? { ...prev, hasTime: true } : prev))
+                        setDueField((prev) => (prev.iso ? { ...prev, hasTime: true } : prev))
+                      }
+                    }}
+                  />
+                  <span>全天</span>
+                </label>
+              }
+            >
+              <span />
             </FormRow>
             <FormRow
               label="开始日期"
@@ -980,18 +1022,22 @@ export default function TodoFormPage() {
                 showTime={!isAllDay}
                 allowClear
                 placeholder="可选"
+                compact
+                hideIcon
               />
             </FormRow>
             <FormRow
-              label={isAllDay ? '截止日期 *' : '截止'}
+              label="截止日期"
               highlighted={changedFields.has('dueAt') || changedFields.has('dueDate')}
             >
               <DateField
                 value={dueField}
                 onChange={setDueField}
                 showTime={!isAllDay}
-                allowClear={!isAllDay}
-                placeholder={isAllDay ? '必选' : '可选'}
+                allowClear
+                placeholder="可选"
+                compact
+                hideIcon
               />
             </FormRow>
             {fieldErrors.dateRange ? (
@@ -1009,45 +1055,6 @@ export default function TodoFormPage() {
               value={selectedReminderName}
               onClick={() => setReminderSheetOpen(true)}
             />
-          </FormRow>
-          <FormRow highlighted={changedFields.has('tagIds')}>
-            {fieldsLocked ? (
-              <div className="flex flex-wrap gap-2">
-                {displayedTags.length === 0 ? (
-                  <span className="text-sm text-text-tertiary">无标签</span>
-                ) : (
-                  displayedTags.map((tag) => (
-                    <span
-                      key={tag.id}
-                      className="rounded-full bg-bg-hover px-2.5 py-0.5 text-xs text-text"
-                    >
-                      {tag.name}
-                    </span>
-                  ))
-                )}
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-wrap gap-2">
-                  {tags.map((tag) => (
-                    <label key={tag.id} className="flex items-center gap-1 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={tagIds.includes(tag.id)}
-                        onChange={(e) => {
-                          setTagIds((prev) =>
-                            e.target.checked
-                              ? [...prev, tag.id]
-                              : prev.filter((tid) => tid !== tag.id),
-                          )
-                        }}
-                      />
-                      {tag.name}
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
           </FormRow>
         </FormCard>
 
@@ -1107,57 +1114,39 @@ export default function TodoFormPage() {
         onClose={() => setListSheetOpen(false)}
       />
 
-      {assignsToOther ? (
-        <OptionSheet
-          open={assigneeSheetOpen}
-          title="选择负责人"
-          options={members.map((m) => ({ id: m.id, name: m.name, member: m }))}
-          selectedId={assigneeId || null}
-          onSelect={(id) => {
-            setAssigneeId(id)
-            setAssigneeIds([])
-          }}
-          onClose={() => setAssigneeSheetOpen(false)}
-          showMemberAvatar
-        />
-      ) : (
-        <MultiOptionSheet
-          open={assigneeSheetOpen}
-          title="选择负责人"
-          options={members.map((m) => ({ id: m.id, name: m.name, member: m }))}
-          selectedIds={assigneeIds}
-          onToggle={(id) => {
-            setAssigneeIds((prev) => {
-              if (prev.includes(id)) {
-                if (prev.length === 1) return prev
-                return prev.filter((memberId) => memberId !== id)
+      <MultiOptionSheet
+        open={assigneeSheetOpen}
+        title="选择负责人"
+        options={members.map((m) => ({ id: m.id, name: m.name, member: m }))}
+        selectedIds={assigneeIds}
+        onToggle={(id) => {
+          setAssigneeIds((prev) => {
+            if (prev.includes(id)) {
+              if (prev.length === 1) {
+                return isEdit ? prev : []
               }
-              return [...prev, id]
-            })
-          }}
-          onConfirm={() => {
-            const next =
-              assigneeIds.length > 0
-                ? assigneeIds
-                : currentMemberId
-                  ? [currentMemberId]
-                  : []
-            setAssigneeIds(next)
-            setAssigneeId(next[0] ?? '')
-            setAssigneeSheetOpen(false)
-          }}
-          onClose={() => setAssigneeSheetOpen(false)}
-          showMemberAvatar
-        />
-      )}
+              return prev.filter((memberId) => memberId !== id)
+            }
 
-      <OptionSheet
-        open={prioritySheetOpen}
-        title="选择优先级"
-        options={PRIORITY_OPTIONS}
-        selectedId={priority}
-        onSelect={(id) => setPriority(id as TodoPriority | '')}
-        onClose={() => setPrioritySheetOpen(false)}
+            const tentative = [...prev, id]
+            const includesSelf =
+              Boolean(currentMemberId) && tentative.includes(currentMemberId)
+
+            if (!includesSelf) {
+              return [id]
+            }
+
+            return tentative
+          })
+        }}
+        onConfirm={() => {
+          const next = normalizeAssigneeIds(assigneeIds, currentMemberId)
+          setAssigneeIds(next)
+          setAssigneeId(next[0] ?? '')
+          setAssigneeSheetOpen(false)
+        }}
+        onClose={() => setAssigneeSheetOpen(false)}
+        showMemberAvatar
       />
 
       <OptionSheet

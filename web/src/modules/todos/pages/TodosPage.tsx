@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { useLocation } from 'react-router-dom'
@@ -32,6 +32,8 @@ import {
 import { getTodoCheckboxAction } from '../services/todo-service'
 import type { TodoItem } from '../types/todo-types'
 
+const COMPLETION_DELAY_MS = 1500
+
 function TodoListGroup({
   title,
   color,
@@ -40,6 +42,7 @@ function TodoListGroup({
   onCheckboxAction,
   onDelete,
   statusReasons,
+  optimisticCompletedIds,
 }: {
   title: string
   color?: string | null
@@ -48,6 +51,7 @@ function TodoListGroup({
   onCheckboxAction: (todo: TodoItem) => void
   onDelete: (todo: TodoItem) => void
   statusReasons?: Map<string, string>
+  optimisticCompletedIds: Set<string>
 }) {
   if (items.length === 0) return null
 
@@ -73,6 +77,7 @@ function TodoListGroup({
                 checkboxAction={getTodoCheckboxAction(todo, currentMemberId)}
                 onCheckboxAction={onCheckboxAction}
                 statusReason={statusReasons?.get(todo.id)}
+                optimisticCompleted={optimisticCompletedIds.has(todo.id)}
               />
             )
             const deletable = canDeleteTodo(todo, currentMemberId)
@@ -113,6 +118,20 @@ export default function TodosPage() {
   const [search, setSearch] = useState('')
   const [toast, setToast] = useState<string | null>(null)
   const [completeDialogTodo, setCompleteDialogTodo] = useState<TodoItem | null>(null)
+  const [optimisticCompletedIds, setOptimisticCompletedIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const completionTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map())
+
+  useEffect(() => {
+    const timers = completionTimersRef.current
+    return () => {
+      for (const timer of timers.values()) {
+        clearTimeout(timer)
+      }
+      timers.clear()
+    }
+  }, [])
 
   const showCompleted = useTodoUiStore((s) => s.showCompleted)
   const listFilterIds = useTodoUiStore((s) => s.listFilterIds)
@@ -166,6 +185,49 @@ export default function TodosPage() {
       sharedLists,
     })
   }, [lists, filteredTodos, currentMemberId])
+
+  function clearPendingCompletion(todoId: string) {
+    const timer = completionTimersRef.current.get(todoId)
+    if (timer) {
+      clearTimeout(timer)
+      completionTimersRef.current.delete(todoId)
+    }
+    setOptimisticCompletedIds((prev) => {
+      if (!prev.has(todoId)) return prev
+      const next = new Set(prev)
+      next.delete(todoId)
+      return next
+    })
+  }
+
+  function schedulePendingCompletion(todo: TodoItem) {
+    setOptimisticCompletedIds((prev) => new Set(prev).add(todo.id))
+
+    const timer = setTimeout(() => {
+      completionTimersRef.current.delete(todo.id)
+      void statusAction
+        .mutateAsync({
+          id: todo.id,
+          action: 'complete',
+          role: 'assignee',
+          currentStatus: todo.status,
+        })
+        .catch((err) => {
+          setToast(String((err as Error).message || '操作失败'))
+          clearPendingCompletion(todo.id)
+        })
+        .finally(() => {
+          setOptimisticCompletedIds((prev) => {
+            if (!prev.has(todo.id)) return prev
+            const next = new Set(prev)
+            next.delete(todo.id)
+            return next
+          })
+        })
+    }, COMPLETION_DELAY_MS)
+
+    completionTimersRef.current.set(todo.id, timer)
+  }
 
   async function handleCheckboxAction(todo: TodoItem) {
     const action = getTodoCheckboxAction(todo, currentMemberId)
@@ -221,12 +283,12 @@ export default function TodosPage() {
           return
         }
 
-        await statusAction.mutateAsync({
-          id: todo.id,
-          action: 'complete',
-          role: 'assignee',
-          currentStatus: todo.status,
-        })
+        if (optimisticCompletedIds.has(todo.id)) {
+          clearPendingCompletion(todo.id)
+          return
+        }
+
+        schedulePendingCompletion(todo)
       }
     } catch (err) {
       setToast(String((err as Error).message || '操作失败'))
@@ -313,6 +375,7 @@ export default function TodosPage() {
                 onCheckboxAction={(todo) => void handleCheckboxAction(todo)}
                 onDelete={(todo) => void handleDelete(todo)}
                 statusReasons={statusReasons}
+                optimisticCompletedIds={optimisticCompletedIds}
               />
             )
           })}
